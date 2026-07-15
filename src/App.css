@@ -202,6 +202,79 @@ h1 {
   font-weight: 600;
 }
 
+.map-view {
+  margin-top: 8px;
+}
+
+.map-shell {
+  overflow: hidden;
+  border: 1px solid rgba(23, 62, 42, 0.1);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 14px 36px rgba(23, 62, 42, 0.08);
+}
+
+.leaflet-map {
+  width: 100%;
+  min-height: 65vh;
+  height: min(65vh, 720px);
+}
+
+.map-pin {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+}
+
+.map-pin::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: white;
+}
+
+.map-pin-farm {
+  background: #d76843;
+  box-shadow: 0 0 0 4px rgba(215, 104, 67, 0.18);
+}
+
+.map-pin-user {
+  background: #355f35;
+  box-shadow: 0 0 0 4px rgba(53, 95, 53, 0.2);
+}
+
+.map-popup {
+  display: grid;
+  gap: 6px;
+  min-width: 220px;
+}
+
+.map-popup strong {
+  font-size: 16px;
+}
+
+.map-popup p {
+  margin: 0;
+  color: #5e665f;
+}
+
+.popup-button {
+  margin-top: 8px;
+}
+
+.location-note {
+  margin-top: 16px;
+  color: #8b5a2b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .filter-button.active,
 .category.active {
   border-color: #355f35;
@@ -404,6 +477,13 @@ h1 {
   font-weight: 700;
 }
 
+@media (min-width: 1200px) {
+  .leaflet-map {
+    min-height: 600px;
+    height: 600px;
+  }
+}
+
 @media (max-width: 700px) {
   .topbar {
     padding: 14px 16px;
@@ -417,6 +497,11 @@ h1 {
     margin: 12px;
     padding: 26px 20px;
     border-radius: 26px;
+  }
+
+  .leaflet-map {
+    min-height: 65vh;
+    height: 65vh;
   }
 
   .content-section {

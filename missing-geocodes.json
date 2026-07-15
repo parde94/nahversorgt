@@ -1,0 +1,982 @@
+[
+  {
+    "id": "rh-10",
+    "name": "Ausser Brugghof",
+    "address": "Ausser Brugghof 30/ | Katharinaberg | 39020 Schnals",
+    "locationText": "Ausser Brugghof 30/ | Katharinaberg | 39020 Schnals",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "rh-11",
+    "name": "Baschtele",
+    "address": "Mittergraben 63 | 39016 Ulten/St. Nikolaus",
+    "locationText": "Mittergraben 63 | 39016 Ulten/St. Nikolaus",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "rh-14",
+    "name": "Hieslerhof",
+    "address": "Hinterdorfweg 24 | 39010 Hafling",
+    "locationText": "Hinterdorfweg 24 | 39010 Hafling",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "rh-32",
+    "name": "Ansitz Villa Raßlhof",
+    "address": "A.-v.-Keller-Weg 11 | 39040 Tramin",
+    "locationText": "A.-v.-Keller-Weg 11 | 39040 Tramin",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-1",
+    "name": "Sennerei Drei Zinnen - Schaukäserei",
+    "address": null,
+    "locationText": "Neutoblach, Toblach, Dolomitenregion 3 Zinnen",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-3",
+    "name": "Handmade with Love",
+    "address": null,
+    "locationText": "St. Pankraz, St.Pankraz, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-4",
+    "name": "Detailgeschäft in der Obstgenossenschaft TEXEL",
+    "address": null,
+    "locationText": "Naturns, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-5",
+    "name": "Thaler Christoph",
+    "address": null,
+    "locationText": "St. Walburg, Ulten, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-6",
+    "name": "Haidenhof - Weinverkostung und Führung",
+    "address": null,
+    "locationText": "Tscherms, Marling, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-8",
+    "name": "Brennereien Roner",
+    "address": null,
+    "locationText": "Tramin an der Weinstraße, Südtiroler Weinstraße",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-9",
+    "name": "1. Bauernbäckerei Tisens",
+    "address": null,
+    "locationText": "Platzers, Tisens, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-11",
+    "name": "Carnerie Pfitschtal",
+    "address": null,
+    "locationText": "Kematen, Pfitsch, Sterzing und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-12",
+    "name": "Egger Schwienbacher Klara",
+    "address": null,
+    "locationText": "St. Walburg, Ulten, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-13",
+    "name": "Imkerstube des Kessler Christian",
+    "address": null,
+    "locationText": "Partschins, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-16",
+    "name": "Imkerei Mairhofer",
+    "address": null,
+    "locationText": "Proveis, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-18",
+    "name": "Weinmanufaktur Ansitz Dornach",
+    "address": null,
+    "locationText": "Salurn, Südtiroler Weinstraße",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-19",
+    "name": "kOmMa5",
+    "address": null,
+    "locationText": "Naturns, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-20",
+    "name": "Mount Becher - Das Genusshaus",
+    "address": null,
+    "locationText": "Ridnaun, Ratschings, Sterzing und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-22",
+    "name": "Käserei Lenkhof",
+    "address": null,
+    "locationText": "Hafling, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-23",
+    "name": "Naturwoll Schafwollverarbeitung",
+    "address": null,
+    "locationText": "St. Peter - Villnöss, Villnöss, Dolomitenregion Lüsen Villnöss",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-25",
+    "name": "Imkerei Plattner Hannes",
+    "address": null,
+    "locationText": "Schlaneid, Mölten, Bozen und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-26",
+    "name": "Weingut Waldthaler",
+    "address": null,
+    "locationText": "Auer, Südtiroler Weinstraße",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-27",
+    "name": "Gatterer Bäckerei-Konditorei mit Café",
+    "address": null,
+    "locationText": "Kiens, Dolomitenregion Kronplatz",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-28",
+    "name": "Hofkäserei Hof zu Fall",
+    "address": null,
+    "locationText": "St. Valentin - Kastelruth, Kastelruth, Dolomitenregion Seiser Alm",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-31",
+    "name": "Genussmanufaktur Walcher",
+    "address": null,
+    "locationText": "Oberplanitzing, Kaltern an der Weinstraße, Südtiroler Weinstraße",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-32",
+    "name": "Bio-Kräuterhof Schmiedthof",
+    "address": null,
+    "locationText": "Brixen Umland, Brixen, Brixen und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-34",
+    "name": "Getreidemühle Karersee",
+    "address": null,
+    "locationText": "Karersee, Welschnofen, Dolomitenregion Eggental",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-38",
+    "name": "Hofladen Pittola",
+    "address": null,
+    "locationText": "Mitterolang, Olang, Dolomitenregion Kronplatz",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-39",
+    "name": "Hofkäserei Biohof-Oberwerkstatt",
+    "address": null,
+    "locationText": "Eggen, Deutschnofen, Dolomitenregion Eggental",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-41",
+    "name": "Imkerei Martin Longo",
+    "address": null,
+    "locationText": "Ausserratschings, Ratschings, Sterzing und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-43",
+    "name": "Oberhof - Blüten und Berge",
+    "address": null,
+    "locationText": "St. Magdalena - Villnöss, Villnöss, Dolomitenregion Lüsen Villnöss",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-44",
+    "name": "Hofbrennerei Reichneggerhof",
+    "address": null,
+    "locationText": "Pawigl, Lana, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-45",
+    "name": "Lahnerhof - Direktvermarkter",
+    "address": null,
+    "locationText": "Kematen, Sand in Taufers, Ahrntal",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-49",
+    "name": "Salmone Dolomiti",
+    "address": null,
+    "locationText": "Niederdorf, Dolomitenregion 3 Zinnen",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-50",
+    "name": "Hofkäserei Wegerhof",
+    "address": null,
+    "locationText": "Moos in Passeier, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-53",
+    "name": "Weingut Bessererhof",
+    "address": null,
+    "locationText": "Blumau, Völs am Schlern, Dolomitenregion Seiser Alm",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-54",
+    "name": "Hubert Egger",
+    "address": null,
+    "locationText": "St. Pankraz, St.Pankraz, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-55",
+    "name": "Brennerei St. Urban",
+    "address": null,
+    "locationText": "Girlan, Eppan an der Weinstraße, Südtiroler Weinstraße",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-58",
+    "name": "Weinkellerei Brunnenhof",
+    "address": null,
+    "locationText": "Mazon, Neumarkt, Südtiroler Weinstraße",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-59",
+    "name": "Hofladen Unterschweig",
+    "address": null,
+    "locationText": "St. Nikolaus in Ulten, Ulten, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-60",
+    "name": "Hofladen Sonnwarthof",
+    "address": null,
+    "locationText": "Nördersberg, Schlanders, Vinschgau",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-62",
+    "name": "Möbelhaus Rogen",
+    "address": null,
+    "locationText": "Spinges, Mühlbach, Brixen und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-63",
+    "name": "Hofkäserei Valin",
+    "address": null,
+    "locationText": "Wolkenstein/Sëlva, Wolkenstein Gröden, Dolomitenregion Gröden",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-64",
+    "name": "Imkerei Apis Aurum",
+    "address": null,
+    "locationText": "Marling, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-65",
+    "name": "Buschenschank Unterweirachhof",
+    "address": null,
+    "locationText": "Partschins, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-67",
+    "name": "Bio-Petrunderhof",
+    "address": null,
+    "locationText": "St. Valentin - Villnöss, Villnöss, Dolomitenregion Lüsen Villnöss",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-68",
+    "name": "Lüch da Ciampidel",
+    "address": null,
+    "locationText": "San Cassiano, Badia, Dolomitenregion Alta Badia",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-69",
+    "name": "Moarhof Hofkäserei",
+    "address": null,
+    "locationText": "Ahornach, Sand in Taufers, Ahrntal",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-70",
+    "name": "Käserei Gostner Schwaige",
+    "address": null,
+    "locationText": "Seiser Alm, Kastelruth, Dolomitenregion Seiser Alm",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-71",
+    "name": "Margarethenbach - Tschintsch am Tschögglberg",
+    "address": null,
+    "locationText": "Glaning, Jenesien, Bozen und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-72",
+    "name": "Milomites",
+    "address": null,
+    "locationText": "Enneberg Pfarre, San Vigilio, Dolomitenregion Kronplatz",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-76",
+    "name": "Imkerei Troger Kofler",
+    "address": null,
+    "locationText": "Platzers, Tisens, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-79",
+    "name": "Vinoteque / Getränke Riffeser",
+    "address": null,
+    "locationText": "Wolkenstein/Sëlva, Wolkenstein Gröden, Dolomitenregion Gröden",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-81",
+    "name": "Hofladen Wieshof",
+    "address": null,
+    "locationText": "Nördersberg, Schlanders, Vinschgau",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-83",
+    "name": "Ansitz Waldgries Christian Plattner",
+    "address": null,
+    "locationText": "Rentsch, Bozen, Bozen und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-91",
+    "name": "Torgglerhof - Destillerie",
+    "address": null,
+    "locationText": "Verdins, Schenna, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-93",
+    "name": "Weingut Zöhlhof",
+    "address": null,
+    "locationText": "Untrum, Feldthurns, Brixen und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-96",
+    "name": "Bauernladele Villnöß",
+    "address": null,
+    "locationText": "St. Peter - Villnöss, Villnöss, Dolomitenregion Lüsen Villnöss",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-97",
+    "name": "Hofladen Ansitz Lidl",
+    "address": null,
+    "locationText": "Prissian, Tisens, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-101",
+    "name": "Wieser Rind",
+    "address": null,
+    "locationText": "Vöran, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-104",
+    "name": "Plattner Bienenhof Imkerei Museum",
+    "address": null,
+    "locationText": "Oberbozen, Ritten, Bozen und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-105",
+    "name": "Kräutergarten Wipptal - Botenhof",
+    "address": null,
+    "locationText": "Pflersch, Brenner, Sterzing und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-109",
+    "name": "Hofkäserei Learner",
+    "address": null,
+    "locationText": "Deutschnofen Dorf, Deutschnofen, Dolomitenregion Eggental",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-111",
+    "name": "Edith's Ziegen-Hofkäserei",
+    "address": null,
+    "locationText": "St. Nikolaus in Ulten, Ulten, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-113",
+    "name": "Mittersteiner Günther",
+    "address": null,
+    "locationText": "St. Walburg, Ulten, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-114",
+    "name": "Weingut Pitzner",
+    "address": null,
+    "locationText": "Kardaun - Karneid, Karneid, Dolomitenregion Eggental",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-115",
+    "name": "Pustertaler Freiheit Brauerei",
+    "address": null,
+    "locationText": "Niederdorf, Dolomitenregion 3 Zinnen",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-117",
+    "name": "Bauernladen - Brennerei Obergereuth Hof",
+    "address": null,
+    "locationText": "St. Martin i.P., St.Martin in Passeier, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-118",
+    "name": "Klasenhof: Hofladen an der Weinstraße & Ladele am Hof",
+    "address": null,
+    "locationText": "Nals, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-121",
+    "name": "Metzgerei Nocker Walter KG & Co",
+    "address": null,
+    "locationText": "Neutoblach, Toblach, Dolomitenregion 3 Zinnen",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-123",
+    "name": "Batzen Bräu",
+    "address": null,
+    "locationText": "Bozner Boden, Bozen, Bozen und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-124",
+    "name": "Überetscher Bauernladen",
+    "address": null,
+    "locationText": "St. Michael - Eppan, Eppan an der Weinstraße, Südtiroler Weinstraße",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-125",
+    "name": "Innerleiterhof - Wine Shop",
+    "address": null,
+    "locationText": "Schenna, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-126",
+    "name": "Gsund versorgt – natürlich selbstgemacht",
+    "address": null,
+    "locationText": "Gfrill, Tisens, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-127",
+    "name": "Lucia's Genüsse - Hofeigene Produkte",
+    "address": null,
+    "locationText": "Pikolein, San Martin, Dolomitenregion Kronplatz",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-129",
+    "name": "Algunder Sennerei",
+    "address": null,
+    "locationText": "Vellau, Algund, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-130",
+    "name": "Pretzhof Shop & Bistro",
+    "address": null,
+    "locationText": "Gasteig, Ratschings, Sterzing und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-133",
+    "name": "Hofkäserei Gatscher",
+    "address": null,
+    "locationText": "Kiens, Dolomitenregion Kronplatz",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-137",
+    "name": "Hofladen Heinrichhof",
+    "address": null,
+    "locationText": "Terlan, Südtiroler Weinstraße",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-138",
+    "name": "Sennerhof",
+    "address": null,
+    "locationText": "Stange, Ratschings, Sterzing und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-139",
+    "name": "Pfitscher Gaumenfreuden",
+    "address": null,
+    "locationText": "St. Jakob - Pfitsch, Pfitsch, Sterzing und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-140",
+    "name": "Gröberhof - Wein-Apfelhofladen",
+    "address": null,
+    "locationText": "Schennaberg, Schenna, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-141",
+    "name": "Imkerei Josef Rinner - Hotel Birkenbrunn",
+    "address": null,
+    "locationText": "Natz, Natz-Schabs, Brixen und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-143",
+    "name": "Bergkräutergarten Villnöß",
+    "address": null,
+    "locationText": "St. Valentin - Villnöss, Villnöss, Dolomitenregion Lüsen Villnöss",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-144",
+    "name": "Hofschank Lechnerhof",
+    "address": null,
+    "locationText": "Ausserprags, Prags, Dolomitenregion 3 Zinnen",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-147",
+    "name": "Alpe Pragas Shop",
+    "address": null,
+    "locationText": "Innerprags, Prags, Dolomitenregion 3 Zinnen",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-148",
+    "name": "Wein, Gärten, Kunst, Kulinarik",
+    "address": null,
+    "locationText": "Tscherms, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-151",
+    "name": "Hofkäserei - Ciajó de Chi Pra",
+    "address": null,
+    "locationText": "Badia, Dolomitenregion Alta Badia",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-152",
+    "name": "Gostner Oswald",
+    "address": null,
+    "locationText": "St. Walburg, Ulten, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-153",
+    "name": "Schwabl Annelies | Koflerhof",
+    "address": null,
+    "locationText": "St. Walburg, Ulten, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-154",
+    "name": "Bozner Bier Hopfen & Co.",
+    "address": null,
+    "locationText": "Bozen Zentrum, Bozen, Bozen und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-156",
+    "name": "Brennerei L. Psenner",
+    "address": null,
+    "locationText": "Tramin an der Weinstraße, Südtiroler Weinstraße",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-158",
+    "name": "Eisendle Reinhold - Schafmilch-Produkte",
+    "address": null,
+    "locationText": "Pflersch, Brenner, Sterzing und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-159",
+    "name": "Lüch da Pcëi",
+    "address": null,
+    "locationText": "San Cassiano, Badia, Dolomitenregion Alta Badia",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-161",
+    "name": "Hofladen Zum Oberen Hof",
+    "address": null,
+    "locationText": "St. Nikolaus in Ulten, Ulten, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-164",
+    "name": "Schafkäserei Linterhof",
+    "address": null,
+    "locationText": "St. Pankraz, St.Pankraz, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-168",
+    "name": "Pföstl Ladele - Hofladen",
+    "address": null,
+    "locationText": "Verdins, Schenna, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-170",
+    "name": "Weinverkauf Hännsl am Ort",
+    "address": null,
+    "locationText": "Pawigl, Lana, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-171",
+    "name": "Bergapfel-Gourmetsäfte Kohl Genussladen",
+    "address": null,
+    "locationText": "Unterinn, Ritten, Bozen und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-172",
+    "name": "Bäckerei Walder GmbH",
+    "address": null,
+    "locationText": "Neutoblach, Toblach, Dolomitenregion 3 Zinnen",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-173",
+    "name": "Mesnerhof - Obst, Gemüse & Wein",
+    "address": null,
+    "locationText": "Teis, Villnöss, Dolomitenregion Lüsen Villnöss",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-174",
+    "name": "Hofladen Stöckler Hof",
+    "address": null,
+    "locationText": "Lana, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-175",
+    "name": "Hofladen Kräutergarten Botenhof",
+    "address": null,
+    "locationText": "Pflersch, Brenner, Sterzing und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-176",
+    "name": "Hofladen Engethalerhof",
+    "address": null,
+    "locationText": "Vigiljoch, Lana, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-178",
+    "name": "Hofladen Mairinghof",
+    "address": null,
+    "locationText": "Nördersberg, Schlanders, Vinschgau",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-179",
+    "name": "Weingut Radoarhof",
+    "address": null,
+    "locationText": "Tschiffnon, Feldthurns, Brixen und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-180",
+    "name": "Besichtigung des Biomasse-Lehrpfades im Fernheizwerk in Toblach",
+    "address": null,
+    "locationText": "Neutoblach, Toblach, Dolomitenregion 3 Zinnen",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-181",
+    "name": "Frubona Obstgenossenschaft Terlan",
+    "address": null,
+    "locationText": "Terlan, Südtiroler Weinstraße",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-182",
+    "name": "Hofbrennerei Fischerhof",
+    "address": null,
+    "locationText": "Schreckbichl, Eppan an der Weinstraße, Südtiroler Weinstraße",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-183",
+    "name": "Weingut Garlider",
+    "address": null,
+    "locationText": "Untrum, Feldthurns, Brixen und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-184",
+    "name": "Schupferhof BIO Hofkäserei",
+    "address": null,
+    "locationText": "St. Martin i.P., St.Martin in Passeier, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-185",
+    "name": "Schnapsbrennerei Zu Plun",
+    "address": null,
+    "locationText": "Seis, Kastelruth, Dolomitenregion Seiser Alm",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-186",
+    "name": "Wollmanufaktur Bergauf",
+    "address": null,
+    "locationText": "St. Walburg, Ulten, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-187",
+    "name": "Braugarten Giardino Forst & Weihnachtshütten im Weihnachtswald",
+    "address": null,
+    "locationText": "Mitterplars, Algund, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-188",
+    "name": "Hotel Restaurant Hanswirt",
+    "address": null,
+    "locationText": "Rabland, Partschins, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-189",
+    "name": "Hofladen Ansitz Mairhof",
+    "address": null,
+    "locationText": "Partschins, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-190",
+    "name": "Käserei Plattkofelalm",
+    "address": null,
+    "locationText": "Seiseralm, Kastelruth, Dolomitenregion Seiser Alm",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-191",
+    "name": "Hofladen Marginterhof",
+    "address": null,
+    "locationText": "Gossensaß, Brenner, Sterzing und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-193",
+    "name": "Josele Mühle",
+    "address": null,
+    "locationText": "Tisens - Kastelruth, Kastelruth, Dolomitenregion Seiser Alm",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-194",
+    "name": "Hofladen Oberpirchhof",
+    "address": null,
+    "locationText": "Schweinsteg, St.Leonhard in Passeier, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-195",
+    "name": "Innerplatzerhof",
+    "address": null,
+    "locationText": "Steinegg, Karneid, Dolomitenregion Eggental",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-196",
+    "name": "Biohof Niedereben",
+    "address": null,
+    "locationText": "Rabland, Partschins, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-197",
+    "name": "Hofladen Esserhüttl",
+    "address": null,
+    "locationText": "St. Pankraz, St.Pankraz, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-200",
+    "name": "Hofladen und Genussatelier Leitnhof",
+    "address": null,
+    "locationText": "St. Pauls - Eppan, Eppan an der Weinstraße, Südtiroler Weinstraße",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-201",
+    "name": "Honey GourMet",
+    "address": null,
+    "locationText": "Partschins, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-202",
+    "name": "Weinkellerei Franz Haas",
+    "address": null,
+    "locationText": "Pinzon, Montan, Südtiroler Weinstraße",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-204",
+    "name": "Perlmühle",
+    "address": null,
+    "locationText": "Tisens - Kastelruth, Kastelruth, Dolomitenregion Seiser Alm",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-205",
+    "name": "Kräutergarten Wipptal - Steirerhof",
+    "address": null,
+    "locationText": "Wiesen, Pfitsch, Sterzing und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-206",
+    "name": "Untermairhof - Bio Beef",
+    "address": null,
+    "locationText": "Außermühlwald, Mühlwald, Ahrntal",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-208",
+    "name": "Hofkäserei Lechnerhof",
+    "address": null,
+    "locationText": "Innerprags, Prags, Dolomitenregion 3 Zinnen",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-209",
+    "name": "Hofladen Leitnerhof",
+    "address": null,
+    "locationText": "Flaas, Jenesien, Bozen und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-210",
+    "name": "Weissenhof Apfelsaft",
+    "address": null,
+    "locationText": "Vilpian, Terlan, Südtiroler Weinstraße",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-211",
+    "name": "Kasserolhof - Weidegänse, Honig, Obst",
+    "address": null,
+    "locationText": "Teis, Villnöss, Dolomitenregion Lüsen Villnöss",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-212",
+    "name": "Bauernladen sea.wies",
+    "address": null,
+    "locationText": "St. Nikolaus in Ulten, Ulten, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-214",
+    "name": "Sandwiesen-Hof",
+    "address": null,
+    "locationText": "Gargazon, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-217",
+    "name": "Schuhservice - Augschöll",
+    "address": null,
+    "locationText": "St. Peter - Villnöss, Villnöss, Dolomitenregion Lüsen Villnöss",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-218",
+    "name": "Maier's Paradies - Honig & Permakultur",
+    "address": null,
+    "locationText": "St. Jakob - Villnöss, Villnöss, Dolomitenregion Lüsen Villnöss",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-219",
+    "name": "Hofladen Vintlerhof",
+    "address": null,
+    "locationText": "Brixen Umland, Brixen, Brixen und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-220",
+    "name": "Hofladen Pröfinghof",
+    "address": null,
+    "locationText": "Partschins, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  },
+  {
+    "id": "abhof-222",
+    "name": "Bio- Schlossweingut Stachlburg",
+    "address": null,
+    "locationText": "Partschins, Meran und Umgebung",
+    "reason": "No geocode hit found within South Tyrol bounds"
+  }
+]
