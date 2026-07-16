@@ -103,6 +103,105 @@ const parseCoordinates = (
   return null;
 };
 
+const normalizePhoneNumber = (value?: string | null): string | null => {
+  const trimmed = value?.trim();
+
+  if (!trimmed) {
+    return null;
+  }
+
+  const digits = trimmed.replace(/\D/g, "");
+
+  if (!digits) {
+    return null;
+  }
+
+  let normalized = digits;
+
+  if (normalized.startsWith("00")) {
+    normalized = normalized.slice(2);
+  }
+
+  if (normalized.startsWith("39") && normalized.length >= 11) {
+    return `+${normalized}`;
+  }
+
+  if (normalized.startsWith("0")) {
+    normalized = normalized.slice(1);
+  }
+
+  if (normalized.length >= 9 && normalized.length <= 10) {
+    return `+39${normalized}`;
+  }
+
+  return null;
+};
+
+const formatPhoneNumber = (value?: string | null): string | null => {
+  const normalized = normalizePhoneNumber(value);
+
+  if (!normalized) {
+    return null;
+  }
+
+  const digits = normalized.replace(/\D/g, "");
+  const numberWithoutCountryCode = digits.startsWith("39")
+    ? digits.slice(2)
+    : digits;
+
+  return `+39 ${numberWithoutCountryCode.replace(/(\d{3})(?=\d)/g, "$1 ")}`;
+};
+
+const normalizeWebsiteUrl = (value?: string | null): string | null => {
+  const trimmed = value?.trim();
+
+  if (!trimmed) {
+    return null;
+  }
+
+  const withProtocol = /^https?:\/\//i.test(trimmed)
+    ? trimmed
+    : `https://${trimmed}`;
+
+  try {
+    const url = new URL(withProtocol);
+
+    if (!/^(https:|http:)$/.test(url.protocol)) {
+      return null;
+    }
+
+    return url.toString();
+  } catch {
+    return null;
+  }
+};
+
+const isPlausibleMobileNumber = (value?: string | null): boolean => {
+  const normalized = normalizePhoneNumber(value);
+
+  if (!normalized) {
+    return false;
+  }
+
+  const digits = normalized.replace(/\D/g, "");
+
+  return /^39\d{9}$/.test(digits) || /^3\d{9}$/.test(digits);
+};
+
+const getWhatsAppTarget = (farm: Farm): string | null => {
+  const whatsappValue = farm.whatsapp ?? farm.phone;
+  const normalized = normalizePhoneNumber(whatsappValue);
+
+  if (!normalized || !isPlausibleMobileNumber(normalized)) {
+    return null;
+  }
+
+  return normalized.replace(/\D/g, "").replace(/^39/, "");
+};
+
+const WHATSAPP_MESSAGE =
+  "Hallo, ich habe Ihren Hof über NahVersorgt gefunden und interessiere mich für Ihre Produkte.";
+
 const categories: Category[] = [
   { id: "obst", label: "Obst", icon: "🍎" },
   { id: "gemuese", label: "Gemüse", icon: "🥕" },
@@ -471,17 +570,35 @@ function App() {
   };
 
   const openWhatsApp = (farm: Farm) => {
-    if (!farm.whatsapp) return;
+    const whatsappTarget = getWhatsAppTarget(farm);
 
-    const message = encodeURIComponent(
-      `Hallo, ich möchte gerne beim ${farm.name} Produkte vorbestellen.`,
-    );
+    if (!whatsappTarget) {
+      return;
+    }
+
+    const message = encodeURIComponent(WHATSAPP_MESSAGE);
 
     window.open(
-      `https://wa.me/${farm.whatsapp}?text=${message}`,
+      `https://wa.me/${whatsappTarget}?text=${message}`,
       "_blank",
       "noopener,noreferrer",
     );
+  };
+
+  const openRouteToFarm = (farm: Farm) => {
+    if (!farm.coordinates) {
+      return;
+    }
+
+    const latitude = farm.coordinates.latitude;
+    const longitude = farm.coordinates.longitude;
+    const destination = `${latitude},${longitude}`;
+    const isAppleDevice = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const mapsUrl = isAppleDevice
+      ? `https://maps.apple.com/?daddr=${destination}&q=${encodeURIComponent(farm.name)}`
+      : `https://www.google.com/maps/dir/?api=1&destination=${destination}`;
+
+    window.open(mapsUrl, "_blank", "noopener,noreferrer");
   };
 
   return (
@@ -515,13 +632,15 @@ function App() {
                 <strong>Produkte:</strong> {selectedFarm.products.join(" · ")}
               </p>
               <p>
-                <strong>Telefon:</strong> {selectedFarm.phone ?? "Keine Angabe"}
+                <strong>Telefon:</strong> {formatPhoneNumber(selectedFarm.phone) ?? "Keine Angabe"}
               </p>
               <p>
-                <strong>WhatsApp:</strong> {selectedFarm.whatsapp ?? "Keine Angabe"}
+                <strong>WhatsApp:</strong>{" "}
+                {formatPhoneNumber(selectedFarm.whatsapp) ?? "Keine Angabe"}
               </p>
               <p>
-                <strong>Webseite:</strong> {selectedFarm.website ?? "Keine Angabe"}
+                <strong>Webseite:</strong>{" "}
+                {selectedFarm.website ?? "Keine Angabe"}
               </p>
               <p>
                 <strong>Öffnungszeiten:</strong>{" "}
@@ -536,6 +655,46 @@ function App() {
               <p>
                 <strong>Entfernung:</strong> {getDistanceLabel(selectedFarm.distance)}
               </p>
+
+              <div className="detail-actions">
+                {normalizePhoneNumber(selectedFarm.phone) && (
+                  <a
+                    className="primary-button action-button"
+                    href={`tel:${normalizePhoneNumber(selectedFarm.phone)}`}
+                  >
+                    Anrufen
+                  </a>
+                )}
+
+                {getWhatsAppTarget(selectedFarm) && (
+                  <button
+                    className="primary-button action-button"
+                    onClick={() => openWhatsApp(selectedFarm)}
+                  >
+                    Per WhatsApp kontaktieren
+                  </button>
+                )}
+
+                {normalizeWebsiteUrl(selectedFarm.website) && (
+                  <a
+                    className="secondary-button action-button"
+                    href={normalizeWebsiteUrl(selectedFarm.website) ?? undefined}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Webseite besuchen
+                  </a>
+                )}
+
+                {selectedFarm.coordinates && (
+                  <button
+                    className="secondary-button action-button"
+                    onClick={() => openRouteToFarm(selectedFarm)}
+                  >
+                    Route zum Hof
+                  </button>
+                )}
+              </div>
             </div>
           </section>
         )}
@@ -595,12 +754,38 @@ function App() {
                         >
                           Hof ansehen
                         </button>
-                        {farm.whatsapp && (
+                        {normalizePhoneNumber(farm.phone) && (
+                          <a
+                            className="primary-button action-button"
+                            href={`tel:${normalizePhoneNumber(farm.phone)}`}
+                          >
+                            Anrufen
+                          </a>
+                        )}
+                        {getWhatsAppTarget(farm) && (
                           <button
                             className="primary-button"
                             onClick={() => openWhatsApp(farm)}
                           >
-                            Per WhatsApp vorbestellen
+                            Per WhatsApp kontaktieren
+                          </button>
+                        )}
+                        {normalizeWebsiteUrl(farm.website) && (
+                          <a
+                            className="secondary-button action-button"
+                            href={normalizeWebsiteUrl(farm.website) ?? undefined}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Webseite besuchen
+                          </a>
+                        )}
+                        {farm.coordinates && (
+                          <button
+                            className="secondary-button"
+                            onClick={() => openRouteToFarm(farm)}
+                          >
+                            Route zum Hof
                           </button>
                         )}
                       </div>
@@ -653,12 +838,38 @@ function App() {
                         >
                           Hof ansehen
                         </button>
-                        {farm.whatsapp && (
+                        {normalizePhoneNumber(farm.phone) && (
+                          <a
+                            className="primary-button action-button"
+                            href={`tel:${normalizePhoneNumber(farm.phone)}`}
+                          >
+                            Anrufen
+                          </a>
+                        )}
+                        {getWhatsAppTarget(farm) && (
                           <button
                             className="primary-button"
                             onClick={() => openWhatsApp(farm)}
                           >
-                            Per WhatsApp vorbestellen
+                            Per WhatsApp kontaktieren
+                          </button>
+                        )}
+                        {normalizeWebsiteUrl(farm.website) && (
+                          <a
+                            className="secondary-button action-button"
+                            href={normalizeWebsiteUrl(farm.website) ?? undefined}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Webseite besuchen
+                          </a>
+                        )}
+                        {farm.coordinates && (
+                          <button
+                            className="secondary-button"
+                            onClick={() => openRouteToFarm(farm)}
+                          >
+                            Route zum Hof
                           </button>
                         )}
                       </div>
@@ -855,6 +1066,42 @@ function App() {
                                 >
                                   Hof ansehen
                                 </button>
+                                <div className="map-popup-actions">
+                                  {normalizePhoneNumber(farm.phone) && (
+                                    <a
+                                      className="primary-button popup-button"
+                                      href={`tel:${normalizePhoneNumber(farm.phone)}`}
+                                    >
+                                      Anrufen
+                                    </a>
+                                  )}
+                                  {getWhatsAppTarget(farm) && (
+                                    <button
+                                      className="primary-button popup-button"
+                                      onClick={() => openWhatsApp(farm)}
+                                    >
+                                      Per WhatsApp kontaktieren
+                                    </button>
+                                  )}
+                                  {normalizeWebsiteUrl(farm.website) && (
+                                    <a
+                                      className="secondary-button popup-button"
+                                      href={normalizeWebsiteUrl(farm.website) ?? undefined}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                    >
+                                      Webseite besuchen
+                                    </a>
+                                  )}
+                                  {farm.coordinates && (
+                                    <button
+                                      className="secondary-button popup-button"
+                                      onClick={() => openRouteToFarm(farm)}
+                                    >
+                                      Route zum Hof
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                             </Popup>
                           </Marker>

@@ -436,11 +436,26 @@ h1 {
   margin-top: 22px;
 }
 
+.detail-actions,
+.map-popup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.detail-actions {
+  margin-top: 18px;
+}
+
 .primary-button,
-.secondary-button {
+.secondary-button,
+.action-button {
+  min-height: 48px;
   padding: 13px 17px;
   border-radius: 14px;
   font-weight: 700;
+  text-decoration: none;
+  text-align: center;
 }
 
 .primary-button {
@@ -552,12 +567,15 @@ h1 {
     font-size: 13px;
   }
 
-  .farm-actions {
+  .farm-actions,
+  .detail-actions,
+  .map-popup-actions {
     flex-direction: column;
   }
 
   .primary-button,
-  .secondary-button {
+  .secondary-button,
+  .action-button {
     width: 100%;
   }
 }
