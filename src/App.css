@@ -249,6 +249,24 @@ h1 {
   box-shadow: 0 0 0 4px rgba(53, 95, 53, 0.2);
 }
 
+.cluster-marker {
+  display: grid;
+  place-items: center;
+  border: 2px solid rgba(255, 255, 255, 0.92);
+  border-radius: 50%;
+  background: #355f35;
+  box-shadow: 0 10px 20px rgba(23, 62, 42, 0.18);
+  color: white;
+  font-weight: 700;
+}
+
+.cluster-marker span {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+}
+
 .map-popup {
   display: grid;
   gap: 6px;

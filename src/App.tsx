@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import L from "leaflet";
-import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
+import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
+import MarkerClusterGroup from "react-leaflet-cluster";
 import heroImage from "./assets/hero.png";
 import farmData from "./data/nahversorgt-data.json";
 import "leaflet/dist/leaflet.css";
+import "react-leaflet-cluster/dist/assets/MarkerCluster.css";
+import "react-leaflet-cluster/dist/assets/MarkerCluster.Default.css";
 import "./App.css";
 
 type Category = {
@@ -164,15 +167,37 @@ const getFarmCategories = (productCategories: string[]) => {
   return Array.from(categorySet);
 };
 
+const getFarmLocation = (farm: FarmSourceEntry) => {
+  const locationCandidates = [farm.address, farm.locationText]
+    .map((value) => value?.split("|").map((part) => part.trim()).filter(Boolean))
+    .filter((parts): parts is string[] => Boolean(parts?.length));
+
+  for (const parts of locationCandidates) {
+    const zipLocation = parts.find((part) => /\d{5}\s+.+/.test(part));
+
+    if (zipLocation) {
+      const normalized = zipLocation.replace(/^\d{5}\s*/, "").trim();
+
+      if (normalized) {
+        return normalized;
+      }
+    }
+
+    const fallback = parts.find((part) => part && !/^\d{5}$/.test(part));
+
+    if (fallback) {
+      return fallback;
+    }
+  }
+
+  return farm.region || "Ort nicht angegeben";
+};
+
 const farms: Farm[] = (farmData as { farms: FarmSourceEntry[] }).farms.map(
   (farm) => ({
     id: farm.id,
     name: farm.name,
-    location:
-      farm.address?.split("|")[1]?.trim() ||
-      farm.locationText?.split("|")[1]?.trim() ||
-      farm.region ||
-      "Unbekannter Ort",
+    location: getFarmLocation(farm),
     distance: null,
     products: farm.products,
     categories: getFarmCategories(farm.productCategories),
@@ -206,16 +231,27 @@ function App() {
   const [activeView, setActiveView] = useState<View>("start");
   const [selectedFarmId, setSelectedFarmId] = useState<string | null>(null);
 
-  const mappedFarms = useMemo(() => {
-    const valid = farms.filter((farm) => {
-      const hasLatitude = Number.isFinite(Number(farm.coordinates?.latitude));
-      const hasLongitude = Number.isFinite(Number(farm.coordinates?.longitude));
+  const getMapZoom = (candidateRadius: number) => {
+    if (candidateRadius <= 5) {
+      return 13;
+    }
 
-      return hasLatitude && hasLongitude;
-    });
+    if (candidateRadius <= 10) {
+      return 12;
+    }
 
-    return valid;
-  }, []);
+    if (candidateRadius <= 15) {
+      return 11;
+    }
+
+    if (candidateRadius <= 25) {
+      return 10;
+    }
+
+    return 9;
+  };
+
+  const mapZoom = userLocation ? getMapZoom(radius) : 9;
 
   useEffect(() => {
     if (!navigator.geolocation) {
@@ -338,9 +374,13 @@ function App() {
   }, [displayedFarms, favorites]);
 
   const mapFarms = useMemo(() => {
-    const mapIds = new Set(filteredFarms.map((farm) => farm.id));
-    return mappedFarms.filter((farm) => mapIds.has(farm.id));
-  }, [filteredFarms, mappedFarms]);
+    return filteredFarms.filter((farm) => {
+      const hasLatitude = Number.isFinite(Number(farm.coordinates?.latitude));
+      const hasLongitude = Number.isFinite(Number(farm.coordinates?.longitude));
+
+      return hasLatitude && hasLongitude;
+    });
+  }, [filteredFarms]);
 
   const mapCenter = userLocation ?? SOUTH_TYROL_CENTER;
   const selectedFarm = displayedFarms.find((farm) => farm.id === selectedFarmId) ?? null;
@@ -367,6 +407,19 @@ function App() {
     }
 
     return `${distance.toFixed(1).replace(".", ",")} km`;
+  };
+
+  const MapViewController = () => {
+    const map = useMap();
+
+    useEffect(() => {
+      map.setView([mapCenter.latitude, mapCenter.longitude], mapZoom, {
+        animate: true,
+        duration: 0.6,
+      });
+    }, [map, mapCenter, mapZoom]);
+
+    return null;
   };
 
   const requestUserLocation = () => {
@@ -748,9 +801,11 @@ function App() {
                       key={userLocation ? "user-location" : "south-tyrol"}
                       className="leaflet-map"
                       center={[mapCenter.latitude, mapCenter.longitude]}
-                      zoom={userLocation ? 11 : 9}
+                      zoom={mapZoom}
                       scrollWheelZoom={false}
                     >
+                      <MapViewController />
+
                       <TileLayer
                         attribution="&copy; OpenStreetMap contributors"
                         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -765,31 +820,46 @@ function App() {
                         </Marker>
                       )}
 
-                      {mapFarms.map((farm) => (
-                        <Marker
-                          key={farm.id}
-                          position={[
-                            Number(farm.coordinates?.latitude),
-                            Number(farm.coordinates?.longitude),
-                          ]}
-                          icon={farmMarkerIcon}
-                        >
-                          <Popup>
-                            <div className="map-popup">
-                              <strong>{farm.name}</strong>
-                              <p>{farm.location}</p>
-                              <p>{farm.products.join(" · ")}</p>
-                              <p>{getDistanceLabel(farm.distance)}</p>
-                              <button
-                                className="primary-button popup-button"
-                                onClick={() => showFarmDetail(farm.id)}
-                              >
-                                Hof ansehen
-                              </button>
-                            </div>
-                          </Popup>
-                        </Marker>
-                      ))}
+                      <MarkerClusterGroup
+                        chunkedLoading
+                        maxClusterRadius={60}
+                        iconCreateFunction={(
+                          cluster: { getChildCount: () => number },
+                        ) =>
+                          L.divIcon({
+                            className: "cluster-marker",
+                            html: `<span>${cluster.getChildCount()}</span>`,
+                            iconSize: [40, 40],
+                            iconAnchor: [20, 20],
+                          })
+                        }
+                      >
+                        {mapFarms.map((farm) => (
+                          <Marker
+                            key={farm.id}
+                            position={[
+                              Number(farm.coordinates?.latitude),
+                              Number(farm.coordinates?.longitude),
+                            ]}
+                            icon={farmMarkerIcon}
+                          >
+                            <Popup>
+                              <div className="map-popup">
+                                <strong>{farm.name}</strong>
+                                <p>{farm.location}</p>
+                                <p>{farm.products.join(" · ")}</p>
+                                <p>{getDistanceLabel(distanceByFarmId[farm.id] ?? null)}</p>
+                                <button
+                                  className="primary-button popup-button"
+                                  onClick={() => showFarmDetail(farm.id)}
+                                >
+                                  Hof ansehen
+                                </button>
+                              </div>
+                            </Popup>
+                          </Marker>
+                        ))}
+                      </MarkerClusterGroup>
                     </MapContainer>
                   </div>
                 </div>
