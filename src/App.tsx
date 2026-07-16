@@ -53,11 +53,26 @@ type Farm = {
   phone?: string;
   website?: string;
   openingHoursText?: string;
+  openingHoursStatus?: string;
+  openingHoursNote?: string;
+  openingHoursOverview?: OpeningHoursOverviewEntry[];
   image: string;
   coordinates: GeoCoordinates | null;
 };
 
 type View = "start" | "discover" | "favorites" | "profile" | "details";
+
+type OpeningHoursOverviewEntry = {
+  day: string;
+  hours: string;
+};
+
+type OpeningHoursInfo = {
+  statusText: string;
+  openNow: boolean | null;
+  specialNote: string | null;
+  weeklyOverview: OpeningHoursOverviewEntry[];
+};
 
 const SOUTH_TYROL_CENTER: GeoCoordinates = {
   latitude: 46.55,
@@ -101,6 +116,204 @@ const parseCoordinates = (
   }
 
   return null;
+};
+
+const DAY_LABELS = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+const DAY_ORDER = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+
+const getWeekdayIndex = (label: string): number | null => {
+  const normalized = label.trim().toLowerCase();
+
+  switch (normalized) {
+    case "mo":
+      return 0;
+    case "di":
+      return 1;
+    case "mi":
+      return 2;
+    case "do":
+      return 3;
+    case "fr":
+      return 4;
+    case "sa":
+      return 5;
+    case "so":
+      return 6;
+    default:
+      return null;
+  }
+};
+
+const normalizeHoursText = (value?: string | null) => value?.trim() ?? null;
+
+const deduplicateDisplayHours = (hours: string[]) => {
+  const unique = new Set<string>();
+
+  hours.forEach((entry) => {
+    const normalized = entry.trim();
+
+    if (normalized) {
+      unique.add(normalized);
+    }
+  });
+
+  return Array.from(unique);
+};
+
+const parseOpeningHoursInfo = (
+  openingHoursText?: string | null,
+): OpeningHoursInfo => {
+  const normalizedText = normalizeHoursText(openingHoursText);
+
+  if (!normalizedText) {
+    return {
+      statusText: "Öffnungszeiten nicht hinterlegt",
+      openNow: null,
+      specialNote: null,
+      weeklyOverview: [],
+    };
+  }
+
+  const lowered = normalizedText.toLowerCase();
+
+  if (
+    /nach telefonischer vereinbarung|auf anfrage|auf vorbestellung/.test(lowered)
+  ) {
+    return {
+      statusText: "Nach telefonischer Vereinbarung",
+      openNow: null,
+      specialNote: "Nach telefonischer Vereinbarung",
+      weeklyOverview: [],
+    };
+  }
+
+  if (/selbstbedienung|24h|24 stunden|automat/.test(lowered)) {
+    return {
+      statusText: "Jetzt geöffnet",
+      openNow: true,
+      specialNote: "Selbstbedienung / 24 Stunden",
+      weeklyOverview: [],
+    };
+  }
+
+  const scheduleSource = normalizedText
+    .replace(/.*?Hofladen:\s*/i, "")
+    .replace(/.*?Ab Hof:\s*/i, "")
+    .split(";")[0]
+    .trim();
+
+  const structuredDayMatches = Array.from(
+    scheduleSource.matchAll(/\b(Mo|Di|Mi|Do|Fr|Sa|So)\b/g),
+  );
+
+  const timeMatches = Array.from(
+    scheduleSource.matchAll(/\d{1,2}(?:[.:]\d{2})?\s*(?:-\s*\d{1,2}(?:[.:]\d{2})?)?\s*Uhr/g),
+  );
+
+  if (structuredDayMatches.length === 0 || timeMatches.length === 0) {
+    return {
+      statusText: "Bitte Öffnungszeiten beim Hof prüfen",
+      openNow: null,
+      specialNote: null,
+      weeklyOverview: [],
+    };
+  }
+
+  const overview = DAY_ORDER.map((day) => ({
+    day,
+    hours: "",
+  }));
+
+  const currentDate = new Date();
+  const currentDayIndex = currentDate.getDay();
+  const currentDayLabel = DAY_LABELS[currentDayIndex];
+
+  const dayRanges = new Map<string, string[]>();
+  const clauses = scheduleSource
+    .split(/(?=\b(?:Mo|Di|Mi|Do|Fr|Sa|So)\b)/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  clauses.forEach((clause) => {
+    const dayTokens = Array.from(clause.matchAll(/\b(Mo|Di|Mi|Do|Fr|Sa|So)\b/g));
+
+    if (dayTokens.length === 0) {
+      return;
+    }
+
+    const primaryDay = dayTokens[0][1];
+    const secondaryDay = dayTokens[1]?.[1] ?? primaryDay;
+    const rangeStart = getWeekdayIndex(primaryDay);
+    const rangeEnd = getWeekdayIndex(secondaryDay);
+
+    if (rangeStart === null || rangeEnd === null) {
+      return;
+    }
+
+    const daySet =
+      rangeStart === rangeEnd
+        ? [primaryDay]
+        : DAY_ORDER.slice(rangeStart, rangeEnd + 1);
+
+    const hoursFromClause = Array.from(
+      clause.matchAll(/\d{1,2}(?:[.:]\d{2})?\s*(?:-\s*\d{1,2}(?:[.:]\d{2})?)?\s*Uhr/g),
+      (match) => match[0].trim(),
+    );
+
+    const uniqueHours = deduplicateDisplayHours(hoursFromClause);
+
+    if (uniqueHours.length === 0) {
+      return;
+    }
+
+    daySet.forEach((day) => {
+      const existing = dayRanges.get(day) ?? [];
+
+      uniqueHours.forEach((hourEntry) => {
+        existing.push(hourEntry);
+      });
+
+      dayRanges.set(day, existing);
+    });
+  });
+
+  overview.forEach((entry) => {
+    const hours = deduplicateDisplayHours(dayRanges.get(entry.day) ?? [])
+      .join(" · ")
+      .trim();
+
+    if (hours) {
+      entry.hours = hours;
+    }
+  });
+
+  const currentDayHours = dayRanges.get(currentDayLabel)?.join(" · ") ?? null;
+  const isCurrentlyOpen = currentDayHours
+    ? /\d{1,2}(?:[.:]\d{2})?\s*-\s*\d{1,2}(?:[.:]\d{2})?\s*Uhr/.test(currentDayHours)
+    : false;
+
+  let statusText = "Geschlossen";
+
+  if (isCurrentlyOpen) {
+    statusText = "Jetzt geöffnet";
+  } else {
+    const nextDayIndex = currentDayIndex === 6 ? 0 : currentDayIndex + 1;
+    const nextDayLabel = DAY_LABELS[nextDayIndex];
+    const nextDayHours = dayRanges.get(nextDayLabel)?.join(" · ") ?? null;
+
+    if (nextDayHours) {
+      statusText = `Öffnet morgen um ${nextDayHours}`;
+    } else if (currentDayHours) {
+      statusText = `Öffnet heute um ${currentDayHours}`;
+    }
+  }
+
+  return {
+    statusText,
+    openNow: isCurrentlyOpen,
+    specialNote: null,
+    weeklyOverview: overview.filter((entry) => entry.hours),
+  };
 };
 
 const normalizePhoneNumber = (value?: string | null): string | null => {
@@ -293,23 +506,30 @@ const getFarmLocation = (farm: FarmSourceEntry) => {
 };
 
 const farms: Farm[] = (farmData as { farms: FarmSourceEntry[] }).farms.map(
-  (farm) => ({
-    id: farm.id,
-    name: farm.name,
-    location: getFarmLocation(farm),
-    distance: null,
-    products: farm.products,
-    categories: getFarmCategories(farm.productCategories),
-    open: Boolean(farm.openingHoursText),
-    delivery: farm.delivery,
-    deliveryRadius: farm.deliveryRadiusKm ?? undefined,
-    whatsapp: farm.whatsapp ?? undefined,
-    phone: farm.phone ?? undefined,
-    website: farm.website ?? undefined,
-    openingHoursText: farm.openingHoursText ?? undefined,
-    image: heroImage,
-    coordinates: parseCoordinates(farm.latitude, farm.longitude),
-  }),
+  (farm) => {
+    const openingHoursInfo = parseOpeningHoursInfo(farm.openingHoursText);
+
+    return {
+      id: farm.id,
+      name: farm.name,
+      location: getFarmLocation(farm),
+      distance: null,
+      products: farm.products,
+      categories: getFarmCategories(farm.productCategories),
+      open: openingHoursInfo.openNow === true,
+      delivery: farm.delivery,
+      deliveryRadius: farm.deliveryRadiusKm ?? undefined,
+      whatsapp: farm.whatsapp ?? undefined,
+      phone: farm.phone ?? undefined,
+      website: farm.website ?? undefined,
+      openingHoursText: farm.openingHoursText ?? undefined,
+      openingHoursStatus: openingHoursInfo.statusText,
+      openingHoursNote: openingHoursInfo.specialNote ?? undefined,
+      openingHoursOverview: openingHoursInfo.weeklyOverview,
+      image: heroImage,
+      coordinates: parseCoordinates(farm.latitude, farm.longitude),
+    };
+  },
 );
 
 function App() {
@@ -644,8 +864,35 @@ function App() {
               </p>
               <p>
                 <strong>Öffnungszeiten:</strong>{" "}
-                {selectedFarm.openingHoursText ?? "Keine Angabe"}
+                {selectedFarm.openingHoursStatus ?? "Öffnungszeiten nicht hinterlegt"}
               </p>
+
+              {selectedFarm.openingHoursNote && (
+                <p>
+                  <strong>Hinweis:</strong> {selectedFarm.openingHoursNote}
+                </p>
+              )}
+
+              {selectedFarm.openingHoursOverview?.length ? (
+                <div className="opening-hours-overview">
+                  <strong>Wochenübersicht</strong>
+                  <div className="opening-hours-grid">
+                    {selectedFarm.openingHoursOverview.map((entry) => (
+                      <div
+                        key={`${selectedFarm.id}-${entry.day}`}
+                        className={
+                          entry.day === DAY_LABELS[new Date().getDay()]
+                            ? "opening-hours-row today"
+                            : "opening-hours-row"
+                        }
+                      >
+                        <span>{entry.day}</span>
+                        <span>{entry.hours || "—"}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               <p>
                 <strong>Lieferung:</strong>{" "}
                 {selectedFarm.delivery
@@ -1148,7 +1395,7 @@ function App() {
                                 farm.open ? "badge open" : "badge closed"
                               }
                             >
-                              {farm.open ? "Heute geöffnet" : "Heute geschlossen"}
+                              {farm.openingHoursStatus ?? "Öffnungszeiten nicht hinterlegt"}
                             </span>
 
                             {farm.delivery && (

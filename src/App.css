@@ -35,7 +35,7 @@ button {
   width: min(100%, 1120px);
   margin: 0 auto;
   min-height: 100vh;
-  padding-bottom: 100px;
+  padding-bottom: 150px;
 }
 
 .topbar {
@@ -427,6 +427,33 @@ h1 {
 .badge.delivery {
   background: #edf0e4;
   color: #506432;
+}
+
+.opening-hours-overview {
+  margin-top: 14px;
+}
+
+.opening-hours-grid {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.opening-hours-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(23, 62, 42, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.opening-hours-row.today {
+  border-color: #355f35;
+  background: #eef5e2;
+  font-weight: 700;
 }
 
 .farm-actions {
