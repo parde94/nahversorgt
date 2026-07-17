@@ -1,5 +1,34 @@
 # React + TypeScript + Vite
 
+## Datenquelle (Supabase + JSON-Fallback)
+
+Die App nutzt Supabase als bevorzugte Lesequelle fur Hofdaten, wenn die Konfiguration vorhanden ist.
+Wenn Supabase nicht konfiguriert ist, nicht erreichbar ist oder eine Abfrage fehlschlagt, fallt die App automatisch auf die bestehende Datei `src/data/nahversorgt-data.json` zuruck.
+
+Benotigte Umgebungsvariablen:
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_PUBLISHABLE_KEY`
+
+Wichtig:
+
+- Bevorzugt wird `VITE_SUPABASE_PUBLISHABLE_KEY`.
+- Aus Kompatibilitatsgrunden wird vorubergehend auch `VITE_SUPABASE_ANON_KEY` als Fallback unterstutzt.
+- Nur ein offentliches Supabase-Frontend-Token darf im Frontend verwendet werden.
+- Keinen `service_role`-Key im Frontend nutzen.
+- Ohne diese Variablen funktioniert die App weiterhin mit dem JSON-Fallback.
+
+### Netlify-Hinweis
+
+In Netlify werden die Variablen unter Site settings -> Environment variables gesetzt:
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_PUBLISHABLE_KEY`
+
+Optional fur den Ubergang (Fallback):
+
+- `VITE_SUPABASE_ANON_KEY`
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:

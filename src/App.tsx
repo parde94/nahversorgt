@@ -4,6 +4,7 @@ import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 import heroImage from "./assets/hero.png";
 import farmData from "./data/nahversorgt-data.json";
+import { loadFarms } from "./services/farmService";
 import "leaflet/dist/leaflet.css";
 import "react-leaflet-cluster/dist/assets/MarkerCluster.css";
 import "react-leaflet-cluster/dist/assets/MarkerCluster.Default.css";
@@ -36,6 +37,8 @@ type FarmSourceEntry = {
   website?: string | null;
   latitude?: number | string | null;
   longitude?: number | string | null;
+  lat?: number | string | null;
+  lng?: number | string | null;
   coordinates?: unknown;
 };
 
@@ -74,6 +77,16 @@ type OpeningHoursInfo = {
   weeklyOverview: OpeningHoursOverviewEntry[];
 };
 
+type DistanceUnavailableReason =
+  | "missing-user-location"
+  | "invalid-user-location"
+  | "missing-farm-coordinates";
+
+type FarmDistanceInfo = {
+  distanceKm: number | null;
+  reason: DistanceUnavailableReason | null;
+};
+
 const SOUTH_TYROL_CENTER: GeoCoordinates = {
   latitude: 46.55,
   longitude: 11.35,
@@ -108,14 +121,94 @@ const parseCoordinates = (
   latitudeValue?: number | string | null,
   longitudeValue?: number | string | null,
 ): GeoCoordinates | null => {
-  const latitude = Number(latitudeValue);
-  const longitude = Number(longitudeValue);
+  const toCoordinateNumber = (value?: number | string | null) => {
+    if (value === null || value === undefined || value === "") {
+      return null;
+    }
 
-  if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+    const parsed = Number(value);
+
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  const latitude = toCoordinateNumber(latitudeValue);
+  const longitude = toCoordinateNumber(longitudeValue);
+
+  if (latitude === null || longitude === null) {
+    return null;
+  }
+
+  const isLatitudeValid = latitude >= -90 && latitude <= 90;
+  const isLongitudeValid = longitude >= -180 && longitude <= 180;
+
+  if (isLatitudeValid && isLongitudeValid && !(latitude === 0 && longitude === 0)) {
     return { latitude, longitude };
   }
 
   return null;
+};
+
+const extractFarmCoordinates = (farm: FarmSourceEntry): GeoCoordinates | null => {
+  const primaryCoordinates = parseCoordinates(
+    farm.latitude ?? farm.lat,
+    farm.longitude ?? farm.lng,
+  );
+
+  if (primaryCoordinates) {
+    return primaryCoordinates;
+  }
+
+  if (!farm.coordinates || typeof farm.coordinates !== "object") {
+    return null;
+  }
+
+  const candidateCoordinates = farm.coordinates as {
+    latitude?: number | string | null;
+    longitude?: number | string | null;
+    lat?: number | string | null;
+    lng?: number | string | null;
+  };
+
+  return parseCoordinates(
+    candidateCoordinates.latitude ?? candidateCoordinates.lat,
+    candidateCoordinates.longitude ?? candidateCoordinates.lng,
+  );
+};
+
+const calculateFarmDistance = (
+  farmCoordinates: GeoCoordinates | null,
+  currentUserLocation: GeoCoordinates | null,
+): FarmDistanceInfo => {
+  if (!currentUserLocation) {
+    return {
+      distanceKm: null,
+      reason: "missing-user-location",
+    };
+  }
+
+  const validatedUserLocation = parseCoordinates(
+    currentUserLocation.latitude,
+    currentUserLocation.longitude,
+  );
+
+  if (!validatedUserLocation) {
+    return {
+      distanceKm: null,
+      reason: "invalid-user-location",
+    };
+  }
+
+  if (!farmCoordinates) {
+    return {
+      distanceKm: null,
+      reason: "missing-farm-coordinates",
+    };
+  }
+
+  return {
+    distanceKm: haversineDistanceKm(validatedUserLocation, farmCoordinates),
+    reason: null,
+  };
 };
 
 const DAY_LABELS = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
@@ -505,8 +598,10 @@ const getFarmLocation = (farm: FarmSourceEntry) => {
   return farm.region || "Ort nicht angegeben";
 };
 
-const farms: Farm[] = (farmData as { farms: FarmSourceEntry[] }).farms.map(
-  (farm) => {
+const fallbackFarmEntries = (farmData as { farms: FarmSourceEntry[] }).farms;
+
+const mapFarmSourceEntriesToFarms = (entries: FarmSourceEntry[]): Farm[] => {
+  return entries.map((farm) => {
     const openingHoursInfo = parseOpeningHoursInfo(farm.openingHoursText);
 
     return {
@@ -527,12 +622,15 @@ const farms: Farm[] = (farmData as { farms: FarmSourceEntry[] }).farms.map(
       openingHoursNote: openingHoursInfo.specialNote ?? undefined,
       openingHoursOverview: openingHoursInfo.weeklyOverview,
       image: heroImage,
-      coordinates: parseCoordinates(farm.latitude, farm.longitude),
+      coordinates: extractFarmCoordinates(farm),
     };
-  },
-);
+  });
+};
+
+const fallbackFarms = mapFarmSourceEntriesToFarms(fallbackFarmEntries);
 
 function App() {
+  const [farms, setFarms] = useState<Farm[]>(fallbackFarms);
   const [search, setSearch] = useState("");
   const [radius, setRadius] = useState(15);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
@@ -544,11 +642,26 @@ function App() {
   const [locationStatus, setLocationStatus] = useState<
     "idle" | "loading" | "active" | "denied" | "unsupported" | "unavailable"
   >("idle");
-  const [distanceByFarmId, setDistanceByFarmId] = useState<
-    Record<string, number | null>
-  >({});
   const [activeView, setActiveView] = useState<View>("start");
   const [selectedFarmId, setSelectedFarmId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const hydrateFarms = async () => {
+      const loadedFarms = await loadFarms();
+
+      if (!isCancelled) {
+        setFarms(mapFarmSourceEntriesToFarms(loadedFarms));
+      }
+    };
+
+    void hydrateFarms();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
 
   const getMapZoom = (candidateRadius: number) => {
     if (candidateRadius <= 5) {
@@ -618,32 +731,42 @@ function App() {
     window.localStorage.setItem("nahversorgt-favorites", JSON.stringify(favorites));
   }, [favorites]);
 
+  const distanceInfoByFarmId = useMemo(() => {
+    return Object.fromEntries(
+      farms.map((farm) => [farm.id, calculateFarmDistance(farm.coordinates, userLocation)]),
+    ) as Record<string, FarmDistanceInfo>;
+  }, [farms, userLocation]);
+
   useEffect(() => {
-    if (!userLocation) {
+    if (!import.meta.env.DEV) {
       return;
     }
 
-    const nextDistances = farms.map((farm) => {
-      if (!farm.coordinates) {
-        return [farm.id, null] as const;
-      }
+    const validFarmCoordinates = farms.filter((farm) => farm.coordinates).length;
+    const reasons = Object.values(distanceInfoByFarmId).reduce(
+      (accumulator, entry) => {
+        if (entry.reason) {
+          accumulator[entry.reason] = (accumulator[entry.reason] ?? 0) + 1;
+        }
 
-      return [
-        farm.id,
-        haversineDistanceKm(userLocation, farm.coordinates),
-      ] as const;
-    });
-
-    setDistanceByFarmId(
-      Object.fromEntries(nextDistances) as Record<string, number | null>,
+        return accumulator;
+      },
+      {} as Record<DistanceUnavailableReason, number>,
     );
-  }, [userLocation]);
+
+    console.info("Distanz-Diagnostik", {
+      hasUserLocation: Boolean(userLocation),
+      farmsTotal: farms.length,
+      farmsWithValidCoordinates: validFarmCoordinates,
+      unavailableReasons: reasons,
+    });
+  }, [distanceInfoByFarmId, farms, userLocation]);
 
   const displayedFarms = useMemo(() => {
     return farms
       .map((farm) => ({
         ...farm,
-        distance: distanceByFarmId[farm.id] ?? null,
+        distance: distanceInfoByFarmId[farm.id]?.distanceKm ?? null,
       }))
       .sort((a, b) => {
         if (a.distance === null && b.distance === null) return 0;
@@ -651,7 +774,7 @@ function App() {
         if (b.distance === null) return -1;
         return a.distance - b.distance;
       });
-  }, [distanceByFarmId]);
+  }, [farms, distanceInfoByFarmId]);
 
   const filteredFarms = useMemo(() => {
     const searchTerm = search.trim().toLowerCase();
@@ -720,8 +843,15 @@ function App() {
     );
   };
 
-  const getDistanceLabel = (distance: number | null) => {
+  const getDistanceLabel = (
+    distance: number | null,
+    reason: DistanceUnavailableReason | null = null,
+  ) => {
     if (distance === null) {
+      if (reason === "missing-user-location" || reason === "invalid-user-location") {
+        return "Standort erforderlich";
+      }
+
       return "Entfernung unbekannt";
     }
 
@@ -771,10 +901,12 @@ function App() {
           setLocationStatus("unavailable");
         }
 
-        console.error("Geolocation error", {
-          code: error.code,
-          message: error.message,
-        });
+        if (import.meta.env.DEV) {
+          console.error("Geolocation error", {
+            code: error.code,
+            message: error.message,
+          });
+        }
       },
       {
         enableHighAccuracy: true,
@@ -900,7 +1032,11 @@ function App() {
                   : "Nein"}
               </p>
               <p>
-                <strong>Entfernung:</strong> {getDistanceLabel(selectedFarm.distance)}
+                <strong>Entfernung:</strong>{" "}
+                {getDistanceLabel(
+                  selectedFarm.distance,
+                  distanceInfoByFarmId[selectedFarm.id]?.reason ?? null,
+                )}
               </p>
 
               <div className="detail-actions">
@@ -983,7 +1119,13 @@ function App() {
                       <div className="farm-card-header">
                         <div>
                           <h3>{farm.name}</h3>
-                          <p>{farm.location} · {getDistanceLabel(farm.distance)}</p>
+                          <p>
+                            {farm.location} ·{" "}
+                            {getDistanceLabel(
+                              farm.distance,
+                              distanceInfoByFarmId[farm.id]?.reason ?? null,
+                            )}
+                          </p>
                         </div>
                         <button
                           className="favorite-button active"
@@ -1063,7 +1205,13 @@ function App() {
                       <div className="farm-card-header">
                         <div>
                           <h3>{farm.name}</h3>
-                          <p>{farm.location} · {getDistanceLabel(farm.distance)}</p>
+                          <p>
+                            {farm.location} ·{" "}
+                            {getDistanceLabel(
+                              farm.distance,
+                              distanceInfoByFarmId[farm.id]?.reason ?? null,
+                            )}
+                          </p>
                         </div>
                         <button
                           className={
@@ -1306,7 +1454,12 @@ function App() {
                                 <strong>{farm.name}</strong>
                                 <p>{farm.location}</p>
                                 <p>{farm.products.join(" · ")}</p>
-                                <p>{getDistanceLabel(distanceByFarmId[farm.id] ?? null)}</p>
+                                <p>
+                                  {getDistanceLabel(
+                                    farm.distance,
+                                    distanceInfoByFarmId[farm.id]?.reason ?? null,
+                                  )}
+                                </p>
                                 <button
                                   className="primary-button popup-button"
                                   onClick={() => showFarmDetail(farm.id)}
@@ -1372,7 +1525,13 @@ function App() {
                           <div className="farm-card-header">
                             <div>
                               <h3>{farm.name}</h3>
-                              <p>{farm.location} · {getDistanceLabel(farm.distance)}</p>
+                              <p>
+                                {farm.location} ·{" "}
+                                {getDistanceLabel(
+                                  farm.distance,
+                                  distanceInfoByFarmId[farm.id]?.reason ?? null,
+                                )}
+                              </p>
                             </div>
                             <button
                               className={
