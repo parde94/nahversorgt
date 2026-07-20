@@ -446,6 +446,17 @@ h1 {
   gap: 18px;
 }
 
+.admin-tabs-panel {
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+
+.admin-tabs-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .admin-toolbar {
   display: grid;
   gap: 12px;
@@ -474,6 +485,31 @@ h1 {
   gap: 12px;
 }
 
+.admin-owned-farm-list {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-owned-farm-card {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.admin-owned-farm-card.active {
+  border-color: #355f35;
+  background: #eef5e2;
+}
+
+.admin-owned-farm-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
 .admin-request-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -495,6 +531,38 @@ h1 {
 
 .admin-detail-card {
   background: rgba(255, 255, 255, 0.7);
+}
+
+.admin-flash-message {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: #edf6e7;
+}
+
+.admin-flash-message .form-success {
+  margin-bottom: 0;
+}
+
+.admin-section-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  color: #173e2a;
+}
+
+.admin-section-toggle h3 {
+  margin-bottom: 0;
 }
 
 .admin-dialog-backdrop {
@@ -891,6 +959,14 @@ h1 {
 
   .admin-request-grid {
     grid-template-columns: 1fr;
+  }
+
+  .admin-owned-farm-card,
+  .admin-owned-farm-meta,
+  .admin-flash-message,
+  .admin-section-toggle {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .farm-card {

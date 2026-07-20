@@ -9,6 +9,7 @@ import {
 import {
   approveExistingFarmClaim,
   listOpenVerificationRequests,
+  listRecentProcessedVerificationRequests,
   rejectVerificationRequest,
   type AdminVerificationRequest,
 } from "../services/adminService";
@@ -159,6 +160,8 @@ const emptyOpeningHourDraft = (): OpeningHourDraft => ({
 type LoadState = "idle" | "loading" | "ready";
 
 type AdminRequestFilter = "all" | "claim_existing_farm" | "register_farm";
+
+type AdminViewTab = "admin" | "farms";
 
 type AdminAction = {
   requestId: string;
@@ -424,6 +427,8 @@ export function FarmerArea() {
   const [requestsLoadState, setRequestsLoadState] = useState<LoadState>("idle");
   const [adminRequests, setAdminRequests] = useState<AdminVerificationRequest[]>([]);
   const [adminRequestsLoadState, setAdminRequestsLoadState] = useState<LoadState>("idle");
+  const [recentAdminRequests, setRecentAdminRequests] = useState<AdminVerificationRequest[]>([]);
+  const [recentAdminRequestsLoadState, setRecentAdminRequestsLoadState] = useState<LoadState>("idle");
   const [dashboard, setDashboard] = useState<FarmerDashboardData | null>(null);
   const [dashboardLoadState, setDashboardLoadState] = useState<LoadState>("idle");
   const [publicFarms, setPublicFarms] = useState<PublicFarmEntry[]>([]);
@@ -451,10 +456,13 @@ export function FarmerArea() {
   const [adminRequestsError, setAdminRequestsError] = useState<string | null>(null);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
   const [adminFilter, setAdminFilter] = useState<AdminRequestFilter>("all");
+  const [adminViewTab, setAdminViewTab] = useState<AdminViewTab>("admin");
   const [adminMessage, setAdminMessage] = useState<string | null>(null);
   const [adminAction, setAdminAction] = useState<AdminAction>(null);
   const [adminActionLoadingId, setAdminActionLoadingId] = useState<string | null>(null);
   const [adminNotes, setAdminNotes] = useState<Record<string, string>>({});
+  const [recentAdminExpanded, setRecentAdminExpanded] = useState(false);
+  const [selectedManagedFarmId, setSelectedManagedFarmId] = useState<string | null>(null);
   const [farmSaveState, setFarmSaveState] = useState<Record<string, boolean>>({});
   const [productSaveState, setProductSaveState] = useState<Record<string, boolean>>({});
   const [openingSaveState, setOpeningSaveState] = useState<Record<string, boolean>>({});
@@ -557,6 +565,8 @@ export function FarmerArea() {
       setRequestsLoadState("idle");
       setAdminRequests([]);
       setAdminRequestsLoadState("idle");
+      setRecentAdminRequests([]);
+      setRecentAdminRequestsLoadState("idle");
       setDashboard(null);
       setDashboardLoadState("idle");
       setProfileLoadError(null);
@@ -566,6 +576,9 @@ export function FarmerArea() {
       setAdminMessage(null);
       setAdminAction(null);
       setAdminActionLoadingId(null);
+      setRecentAdminExpanded(false);
+      setSelectedManagedFarmId(null);
+      setAdminViewTab("admin");
       setPublicFarmsError(null);
       return;
     }
@@ -627,35 +640,6 @@ export function FarmerArea() {
       }
     };
 
-    const hydrateAdminRequests = async () => {
-      if (profile?.role !== "admin") {
-        setAdminRequests([]);
-        setAdminRequestsLoadState("idle");
-        return;
-      }
-
-      setAdminRequestsLoadState("loading");
-
-      try {
-        const openRequests = await listOpenVerificationRequests();
-
-        if (!cancelled) {
-          setAdminRequests(openRequests);
-        }
-      } catch (error) {
-        logSupabaseError("admin verification_requests", error);
-
-        if (!cancelled) {
-          setAdminRequests([]);
-          setAdminRequestsError("Die offenen Anträge konnten gerade nicht geladen werden.");
-        }
-      } finally {
-        if (!cancelled) {
-          setAdminRequestsLoadState("ready");
-        }
-      }
-    };
-
     const hydrateDashboard = async () => {
       setDashboardLoadState("loading");
 
@@ -688,7 +672,6 @@ export function FarmerArea() {
     setDashboardError(null);
     void hydrateProfile();
     void hydrateRequests();
-    void hydrateAdminRequests();
     void hydrateDashboard();
 
     return () => {
@@ -707,27 +690,36 @@ export function FarmerArea() {
       if (profile?.role !== "admin") {
         setAdminRequests([]);
         setAdminRequestsLoadState("idle");
+        setRecentAdminRequests([]);
+        setRecentAdminRequestsLoadState("idle");
         return;
       }
 
       setAdminRequestsLoadState("loading");
+      setRecentAdminRequestsLoadState("loading");
 
       try {
-        const openRequests = await listOpenVerificationRequests();
+        const [openRequests, processedRequests] = await Promise.all([
+          listOpenVerificationRequests(),
+          listRecentProcessedVerificationRequests(),
+        ]);
 
         if (!cancelled) {
           setAdminRequests(openRequests);
+          setRecentAdminRequests(processedRequests);
         }
       } catch (error) {
         logSupabaseError("admin verification_requests", error);
 
         if (!cancelled) {
           setAdminRequests([]);
+          setRecentAdminRequests([]);
           setAdminRequestsError("Die offenen Anträge konnten gerade nicht geladen werden.");
         }
       } finally {
         if (!cancelled) {
           setAdminRequestsLoadState("ready");
+          setRecentAdminRequestsLoadState("ready");
         }
       }
     };
@@ -739,6 +731,42 @@ export function FarmerArea() {
       cancelled = true;
     };
   }, [session.user, profile?.role]);
+
+  useEffect(() => {
+    if (!adminMessage) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setAdminMessage(null);
+    }, 5000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [adminMessage]);
+
+  useEffect(() => {
+    if (profile?.role !== "admin") {
+      setAdminViewTab("admin");
+      setSelectedManagedFarmId(null);
+      return;
+    }
+
+    const ownedFarmIds = (dashboard?.ownedFarms ?? [])
+      .map((ownership) => ownership.farm?.id)
+      .filter((id): id is string => Boolean(id));
+
+    if (ownedFarmIds.length === 0) {
+      setAdminViewTab("admin");
+      setSelectedManagedFarmId(null);
+      return;
+    }
+
+    if (!selectedManagedFarmId || !ownedFarmIds.includes(selectedManagedFarmId)) {
+      setSelectedManagedFarmId(ownedFarmIds[0]);
+    }
+  }, [dashboard?.ownedFarms, profile?.role, selectedManagedFarmId]);
 
   useEffect(() => {
     if (session.user?.email) {
@@ -828,7 +856,12 @@ export function FarmerArea() {
     [requests],
   );
 
-  const verifiedOwnedFarms = dashboard?.ownedFarms.filter((ownership) => ownership.farm) ?? [];
+  const manageableOwnedFarms = dashboard?.ownedFarms.filter((ownership) => ownership.farm) ?? [];
+  const adminHasOwnedFarms = profile?.role === "admin" && manageableOwnedFarms.length > 0;
+  const selectedManagedOwnerships =
+    profile?.role === "admin" && selectedManagedFarmId
+      ? manageableOwnedFarms.filter((ownership) => ownership.farm?.id === selectedManagedFarmId)
+      : manageableOwnedFarms;
 
   const refreshRequests = async (profileId: string) => {
     const myRequests = await listMyVerificationRequests(profileId);
@@ -841,8 +874,12 @@ export function FarmerArea() {
   };
 
   const refreshAdminRequests = async () => {
-    const openRequests = await listOpenVerificationRequests();
+    const [openRequests, processedRequests] = await Promise.all([
+      listOpenVerificationRequests(),
+      listRecentProcessedVerificationRequests(),
+    ]);
     setAdminRequests(openRequests);
+    setRecentAdminRequests(processedRequests);
   };
 
   const visibleAdminRequests = useMemo(() => {
@@ -1697,7 +1734,16 @@ export function FarmerArea() {
     </section>
   );
 
-  const renderVerifiedDashboard = () => {
+  const renderFarmManagement = (
+    ownerships: FarmerDashboardData["ownedFarms"],
+    options?: {
+      emptyTitle?: string;
+      emptyMessage?: string;
+      headingLabel?: string;
+    },
+  ) => {
+    const headingLabel = options?.headingLabel ?? "Dein Hof";
+
     if (dashboardLoadState === "loading") {
       return <div className="empty-state">Farmer-Dashboard wird geladen…</div>;
     }
@@ -1707,7 +1753,7 @@ export function FarmerArea() {
         <section className="profile-block">
           <div className="section-heading compact-heading">
             <div>
-              <span className="eyebrow">Dein Hof</span>
+              <span className="eyebrow">{headingLabel}</span>
               <h3>Hofbereich nicht verfügbar</h3>
             </div>
           </div>
@@ -1718,24 +1764,24 @@ export function FarmerArea() {
       );
     }
 
-    if (!dashboard || verifiedOwnedFarms.length === 0) {
+    if (!dashboard || ownerships.length === 0) {
       return (
         <section className="profile-block">
           <div className="section-heading compact-heading">
             <div>
-              <span className="eyebrow">Dein Hof</span>
-              <h3>Keine aktive Zuordnung</h3>
+              <span className="eyebrow">{headingLabel}</span>
+              <h3>{options?.emptyTitle ?? "Keine aktive Zuordnung"}</h3>
             </div>
           </div>
 
-          <p>Dein Konto ist verifiziert, aber noch keinem aktiven Hof zugeordnet.</p>
+          <p>{options?.emptyMessage ?? "Dein Konto ist verifiziert, aber noch keinem aktiven Hof zugeordnet."}</p>
         </section>
       );
     }
 
     return (
       <div className="dashboard-list">
-        {verifiedOwnedFarms.map((ownership) => {
+        {ownerships.map((ownership) => {
           const farm = ownership.farm;
 
           if (!farm) {
@@ -1749,7 +1795,7 @@ export function FarmerArea() {
             <section className="profile-block dashboard-card" key={farm.id}>
               <div className="section-heading compact-heading">
                 <div>
-                  <span className="eyebrow">Dein Hof</span>
+                  <span className="eyebrow">{headingLabel}</span>
                   <h3>{farm.name}</h3>
                 </div>
 
@@ -2361,6 +2407,109 @@ export function FarmerArea() {
     );
   };
 
+  const renderRecentAdminRequests = () => (
+    <section className="profile-block admin-panel">
+      <button
+        className="admin-section-toggle"
+        onClick={() => setRecentAdminExpanded((current) => !current)}
+        aria-expanded={recentAdminExpanded}
+      >
+        <div>
+          <span className="eyebrow">Adminbereich</span>
+          <h3>Zuletzt bearbeitet</h3>
+        </div>
+        <span>{recentAdminExpanded ? "Ausblenden" : "Einblenden"}</span>
+      </button>
+
+      {recentAdminExpanded && (
+        recentAdminRequestsLoadState === "loading" ? (
+          <div className="empty-state">Bearbeitete Anträge werden geladen…</div>
+        ) : recentAdminRequests.length === 0 ? (
+          <div className="empty-state">Noch keine bearbeiteten Anträge vorhanden.</div>
+        ) : (
+          <div className="admin-request-list">
+            {recentAdminRequests.map((request) => (
+              <article className="request-card admin-request-card" key={request.id}>
+                <div className="request-card-header">
+                  <div>
+                    <strong>{getAdminRequestFarmName(request)}</strong>
+                    <p>{getAdminApplicantName(request)}</p>
+                  </div>
+
+                  <span className={`badge request-status ${request.status}`}>{requestStatusLabel(request.status)}</span>
+                </div>
+
+                <div className="admin-request-grid">
+                  <div>
+                    <span>Entscheidung</span>
+                    <strong>{requestStatusLabel(request.status)}</strong>
+                  </div>
+                  <div>
+                    <span>Datum</span>
+                    <strong>{request.reviewed_at ? formatDate(request.reviewed_at) : "Nicht angegeben"}</strong>
+                  </div>
+                  <div className="admin-grid-wide">
+                    <span>Adminnotiz</span>
+                    <strong>{request.admin_note?.trim() || "Keine Adminnotiz"}</strong>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        )
+      )}
+    </section>
+  );
+
+  const renderAdminOwnedFarms = () => (
+    <>
+      <section className="profile-block admin-panel">
+        <div className="section-heading compact-heading">
+          <div>
+            <span className="eyebrow">Meine Höfe</span>
+            <h3>Aktive Hofzuordnungen</h3>
+          </div>
+
+          <span className="badge open">{manageableOwnedFarms.length}</span>
+        </div>
+
+        <div className="admin-owned-farm-list">
+          {manageableOwnedFarms.map((ownership) => {
+            const farm = ownership.farm;
+
+            if (!farm) {
+              return null;
+            }
+
+            const isSelected = selectedManagedFarmId === farm.id;
+
+            return (
+              <article className={isSelected ? "detail-card admin-owned-farm-card active" : "detail-card admin-owned-farm-card"} key={farm.id}>
+                <div>
+                  <h4>{farm.name}</h4>
+                  <p>{[farm.postal_code, farm.city].filter(Boolean).join(" ") || farm.region || "Ort nicht angegeben"}</p>
+                </div>
+
+                <div className="admin-owned-farm-meta">
+                  <span className="badge open">{ownership.is_primary_owner ? "Hauptinhaber" : "Mitinhaber"}</span>
+                  <button className="secondary-button" onClick={() => setSelectedManagedFarmId(farm.id)}>
+                    Hof verwalten
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+
+      {renderFarmManagement(selectedManagedOwnerships, {
+        emptyTitle: "Keine aktive Hofzuordnung",
+        emptyMessage: "Diesem Adminprofil ist aktuell kein aktiver Hof zugeordnet.",
+        headingLabel: "Mein Hof",
+      })}
+    </>
+  );
+
   const renderAdminRequests = () => (
     <section className="profile-block admin-panel">
       <div className="section-heading compact-heading">
@@ -2395,7 +2544,14 @@ export function FarmerArea() {
         </div>
       </div>
 
-      {adminMessage && <p className="form-success">{adminMessage}</p>}
+      {adminMessage && (
+        <div className="admin-flash-message">
+          <p className="form-success">{adminMessage}</p>
+          <button className="text-button" onClick={() => setAdminMessage(null)}>
+            Schließen
+          </button>
+        </div>
+      )}
       {adminRequestsError && <p className="form-error">{adminRequestsError}</p>}
 
       {adminRequestsLoadState === "loading" ? (
@@ -2575,8 +2731,8 @@ export function FarmerArea() {
           <section className="profile-block">
             <div className="section-heading compact-heading">
               <div>
-                <span className="eyebrow">{profile?.role === "admin" ? "Adminbereich" : "Mein Bereich"}</span>
-                <h3>{profile?.display_name?.trim() || session.user.email || ""}</h3>
+                <span className="eyebrow">NahVersorgt</span>
+                <h3>Mein Bereich</h3>
               </div>
 
               <span className={`badge request-status ${profile?.role ?? "farmer_pending"}`}>
@@ -2589,7 +2745,7 @@ export function FarmerArea() {
             {profile?.role === "admin" ? (
               <div className="detail-card">
                 <h4>Freigaben und Prüfungen</h4>
-                <p>Bestehende Hofanträge werden hier über sichere Serverfunktionen geprüft und freigegeben.</p>
+                <p>Du prüfst offene Hofanträge im Adminbereich und kannst bei eigener Hofzuordnung zusätzlich deine Höfe verwalten.</p>
               </div>
             ) : profile?.role === "farmer_verified" ? (
               <div className="detail-card">
@@ -2617,9 +2773,41 @@ export function FarmerArea() {
             </button>
           </section>
 
-          {profile?.role === "admin" ? renderAdminRequests() : renderRequests()}
+          {profile?.role === "admin" && adminHasOwnedFarms && (
+            <section className="profile-block admin-tabs-panel">
+              <div className="admin-tabs-row" role="tablist" aria-label="Mein Bereich Tabs">
+                <button
+                  className={adminViewTab === "admin" ? "chip active" : "chip"}
+                  onClick={() => setAdminViewTab("admin")}
+                  role="tab"
+                  aria-selected={adminViewTab === "admin"}
+                >
+                  Adminbereich
+                </button>
+                <button
+                  className={adminViewTab === "farms" ? "chip active" : "chip"}
+                  onClick={() => setAdminViewTab("farms")}
+                  role="tab"
+                  aria-selected={adminViewTab === "farms"}
+                >
+                  Meine Höfe
+                </button>
+              </div>
+            </section>
+          )}
 
-          {profile?.role === "farmer_verified" && renderVerifiedDashboard()}
+          {profile?.role === "admin" ? (
+            adminViewTab === "farms" && adminHasOwnedFarms ? (
+              renderAdminOwnedFarms()
+            ) : (
+              <>
+                {renderAdminRequests()}
+                {renderRecentAdminRequests()}
+              </>
+            )
+          ) : renderRequests()}
+
+          {profile?.role === "farmer_verified" && renderFarmManagement(manageableOwnedFarms)}
         </>
       ) : (
         <>

@@ -30,6 +30,7 @@ export type AdminVerificationRequest = VerificationRequestRecord & {
   requesterProfile: AdminRequesterProfile | null;
   relatedFarm: AdminFarmRecord | null;
   applicantEmail: string | null;
+  reviewed_at: string | null;
 };
 
 type VerificationRequestRow = Omit<VerificationRequestRecord, "farm"> & {
@@ -98,6 +99,41 @@ export const listOpenVerificationRequests = async (): Promise<AdminVerificationR
     .select(requestSelect)
     .eq("status", "pending")
     .order("created_at", { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  const requests = (data ?? []) as VerificationRequestRow[];
+  const requesterIds = Array.from(
+    new Set(requests.flatMap((request) => [request.requested_by_profile_id, request.profile_id]).filter(Boolean)),
+  );
+  const farmIds = Array.from(new Set(requests.map((request) => request.farm_id).filter((id): id is string => Boolean(id))));
+
+  const [profilesById, farmsById] = await Promise.all([loadProfilesByIds(requesterIds), loadFarmsByIds(farmIds)]);
+
+  return requests.map((request) => {
+    const requesterProfile = profilesById.get(request.requested_by_profile_id) ?? profilesById.get(request.profile_id) ?? null;
+
+    return {
+      ...request,
+      farm: null,
+      requesterProfile,
+      relatedFarm: request.farm_id ? farmsById.get(request.farm_id) ?? null : null,
+      applicantEmail: getApplicantEmail(request),
+    };
+  });
+};
+
+export const listRecentProcessedVerificationRequests = async (): Promise<AdminVerificationRequest[]> => {
+  const client = requireSupabase();
+
+  const { data, error } = await client
+    .from("verification_requests")
+    .select(requestSelect)
+    .in("status", ["approved", "rejected"])
+    .order("reviewed_at", { ascending: false, nullsFirst: false })
+    .limit(10);
 
   if (error) {
     throw error;
