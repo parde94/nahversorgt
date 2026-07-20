@@ -3,6 +3,7 @@ import { supabase } from "../lib/supabase";
 
 type FarmSourceEntry = {
   id: string;
+  databaseId: string;
   name: string;
   region?: string;
   locationText?: string;
@@ -22,7 +23,7 @@ type FarmSourceEntry = {
 };
 
 type FarmDataFile = {
-  farms: FarmSourceEntry[];
+  farms: Array<Omit<FarmSourceEntry, "databaseId">>;
 };
 
 type DbFarmRow = {
@@ -166,7 +167,11 @@ const buildOpeningHoursText = (
   return lines.join("; ");
 };
 
-const getJsonFallbackFarms = () => fallbackFarms;
+const getJsonFallbackFarms = (): FarmSourceEntry[] =>
+  fallbackFarms.map((farm) => ({
+    ...farm,
+    databaseId: farm.id,
+  }));
 
 const fetchSupabaseFarms = async (): Promise<FarmSourceEntry[]> => {
   if (!supabase) {
@@ -266,6 +271,7 @@ const fetchSupabaseFarms = async (): Promise<FarmSourceEntry[]> => {
 
     return {
       id: stableId,
+      databaseId: farm.id,
       name: farm.name,
       region: farm.region ?? undefined,
       locationText: farm.location_text ?? undefined,

@@ -46,6 +46,7 @@ type SessionState = {
 
 type PublicFarmEntry = {
   id: string;
+  databaseId: string;
   name: string;
   region?: string;
   locationText?: string;
@@ -156,31 +157,40 @@ const getSupabaseErrorDetails = (error: unknown) => {
     const typedError = error as {
       code?: unknown;
       message?: unknown;
+      details?: unknown;
+      hint?: unknown;
     };
 
     return {
       code: typeof typedError.code === "string" ? typedError.code : null,
       message: typeof typedError.message === "string" ? typedError.message : String(error),
+      details: typeof typedError.details === "string" ? typedError.details : null,
+      hint: typeof typedError.hint === "string" ? typedError.hint : null,
     };
   }
 
   return {
     code: null,
     message: String(error),
+    details: null,
+    hint: null,
   };
 };
 
-const logSupabaseError = (tableName: string, error: unknown) => {
+const logSupabaseError = (tableName: string, error: unknown, fieldNames?: string[]) => {
   if (!import.meta.env.DEV) {
     return;
   }
 
-  const { code, message } = getSupabaseErrorDetails(error);
+  const { code, message, details, hint } = getSupabaseErrorDetails(error);
 
   console.warn(`Supabase-Fehler bei ${tableName}`, {
     table: tableName,
     code,
     message,
+    details,
+    hint,
+    fieldNames,
     error,
   });
 };
@@ -469,6 +479,7 @@ export function FarmerArea() {
           setPublicFarms(
             farms.map((farm) => ({
               id: farm.id,
+              databaseId: farm.databaseId,
               name: farm.name,
               region: farm.region,
               locationText: farm.locationText,
@@ -678,6 +689,24 @@ export function FarmerArea() {
     [publicFarms, selectedClaimFarmId],
   );
 
+  const hasPendingClaimRequest = useMemo(() => {
+    if (!selectedClaimFarm) {
+      return false;
+    }
+
+    return requests.some(
+      (request) =>
+        request.request_type === "claim_existing_farm" &&
+        request.farm_id === selectedClaimFarm.databaseId &&
+        request.status === "pending",
+    );
+  }, [requests, selectedClaimFarm]);
+
+  const hasPendingRegisterRequest = useMemo(
+    () => requests.some((request) => request.request_type === "register_farm" && request.status === "pending"),
+    [requests],
+  );
+
   const verifiedOwnedFarms = dashboard?.ownedFarms.filter((ownership) => ownership.farm) ?? [];
 
   const refreshRequests = async (profileId: string) => {
@@ -775,7 +804,17 @@ export function FarmerArea() {
       return;
     }
 
+    if (!selectedClaimFarm.databaseId) {
+      setClaimError("Der ausgewählte Hof konnte nicht mit der Datenbank verknüpft werden.");
+      return;
+    }
+
     if (claimLoading) {
+      return;
+    }
+
+    if (hasPendingClaimRequest) {
+      setClaimError("Für diesen Hof ist bereits ein Antrag in Prüfung.");
       return;
     }
 
@@ -791,7 +830,7 @@ export function FarmerArea() {
     try {
       await createClaimExistingFarmRequest({
         profileId: session.user.id,
-        farmId: selectedClaimFarm.id,
+        farmId: selectedClaimFarm.databaseId,
         requestedChanges: {
           message: claimForm.message.trim(),
           phone: claimForm.phone.trim() || null,
@@ -806,10 +845,21 @@ export function FarmerArea() {
         logSupabaseError("verification_requests", refreshError);
       }
 
-      setClaimMessage("Dein Antrag wurde an die Prüfung übergeben.");
-      setClaimForm((current) => ({ ...current, message: "", phone: "" }));
+      setClaimMessage("Dein Antrag wurde an die Prüfung übergeben. Status: In Prüfung.");
+      setClaimForm({
+        message: "",
+        phone: "",
+        email: session.user.email ?? "",
+      });
     } catch (error) {
-      logSupabaseError("verification_requests", error);
+      logSupabaseError("verification_requests", error, [
+        "profile_id",
+        "requested_by_profile_id",
+        "farm_id",
+        "request_type",
+        "requested_changes",
+        "current_snapshot",
+      ]);
 
       setClaimError(friendlyErrorMessage(error));
     } finally {
@@ -824,6 +874,11 @@ export function FarmerArea() {
     }
 
     if (newFarmLoading) {
+      return;
+    }
+
+    if (hasPendingRegisterRequest) {
+      setNewFarmError("Für die Meldung eines neuen Hofes ist bereits ein Antrag in Prüfung.");
       return;
     }
 
@@ -873,7 +928,14 @@ export function FarmerArea() {
       setNewFarmMessage("Deine Meldung wurde zur Prüfung eingereicht.");
       setNewFarmForm(emptyNewFarmForm());
     } catch (error) {
-      logSupabaseError("verification_requests", error);
+      logSupabaseError("verification_requests", error, [
+        "profile_id",
+        "requested_by_profile_id",
+        "farm_id",
+        "request_type",
+        "requested_changes",
+        "current_snapshot",
+      ]);
 
       setNewFarmError(friendlyErrorMessage(error));
     } finally {
@@ -1273,7 +1335,11 @@ export function FarmerArea() {
       {claimError && <p className="form-error">{claimError}</p>}
       {claimMessage && <p className="form-success">{claimMessage}</p>}
 
-      <button className="primary-button" onClick={submitClaimRequest} disabled={claimLoading || !selectedClaimFarm}>
+      <button
+        className="primary-button"
+        onClick={submitClaimRequest}
+        disabled={claimLoading || !selectedClaimFarm || hasPendingClaimRequest}
+      >
         {claimLoading ? "Bitte warten…" : "Antrag absenden"}
       </button>
     </section>
@@ -1430,7 +1496,7 @@ export function FarmerArea() {
       {newFarmError && <p className="form-error">{newFarmError}</p>}
       {newFarmMessage && <p className="form-success">{newFarmMessage}</p>}
 
-      <button className="primary-button" onClick={submitNewFarmRequest} disabled={newFarmLoading}>
+      <button className="primary-button" onClick={submitNewFarmRequest} disabled={newFarmLoading || hasPendingRegisterRequest}>
         {newFarmLoading ? "Bitte warten…" : "Antrag senden"}
       </button>
     </section>
