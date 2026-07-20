@@ -442,6 +442,83 @@ h1 {
   gap: 12px;
 }
 
+.admin-panel {
+  gap: 18px;
+}
+
+.admin-toolbar {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.admin-hint {
+  padding: 14px 16px;
+  border-left: 4px solid #67823e;
+  border-radius: 16px;
+  background: #f3f7ea;
+}
+
+.admin-hint p {
+  margin-bottom: 0;
+  color: #5e665f;
+}
+
+.admin-request-list {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-request-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-request-grid div {
+  display: grid;
+  gap: 4px;
+}
+
+.admin-request-grid strong {
+  color: #173e2a;
+}
+
+.admin-grid-wide {
+  grid-column: 1 / -1;
+}
+
+.admin-detail-card {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.admin-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(23, 62, 42, 0.38);
+  backdrop-filter: blur(8px);
+}
+
+.admin-dialog {
+  width: min(100%, 560px);
+  display: grid;
+  gap: 14px;
+  padding: 24px;
+  border: 1px solid rgba(23, 62, 42, 0.08);
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 24px 70px rgba(23, 62, 42, 0.18);
+}
+
 .request-card-header {
   display: flex;
   justify-content: space-between;
@@ -812,6 +889,10 @@ h1 {
     grid-template-columns: 1fr;
   }
 
+  .admin-request-grid {
+    grid-template-columns: 1fr;
+  }
+
   .farm-card {
     grid-template-columns: 112px 1fr;
     border-radius: 22px;
@@ -849,6 +930,10 @@ h1 {
   .secondary-button,
   .action-button {
     width: 100%;
+  }
+
+  .admin-dialog-backdrop {
+    padding: 12px;
   }
 }
 

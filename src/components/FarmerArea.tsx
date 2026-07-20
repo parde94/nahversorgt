@@ -7,6 +7,12 @@ import {
   type VerificationRequestRecord,
 } from "../services/verificationService";
 import {
+  approveExistingFarmClaim,
+  listOpenVerificationRequests,
+  rejectVerificationRequest,
+  type AdminVerificationRequest,
+} from "../services/adminService";
+import {
   getCurrentSession,
   isSupabaseConfigured,
   onAuthStateChange,
@@ -151,6 +157,13 @@ const emptyOpeningHourDraft = (): OpeningHourDraft => ({
 });
 
 type LoadState = "idle" | "loading" | "ready";
+
+type AdminRequestFilter = "all" | "claim_existing_farm" | "register_farm";
+
+type AdminAction = {
+  requestId: string;
+  type: "approve" | "reject";
+} | null;
 
 const getSupabaseErrorDetails = (error: unknown) => {
   if (error && typeof error === "object") {
@@ -304,6 +317,24 @@ const getRequestFarmName = (request: VerificationRequestRecord) => {
   return request.farm?.name ?? readString(readRecordValue(request.current_snapshot, "name"), "Hof");
 };
 
+const getAdminRequestFarmName = (request: AdminVerificationRequest) => {
+  if (request.request_type === "register_farm") {
+    return readString(readRecordValue(request.requested_changes, "name"), "Neuer Hof");
+  }
+
+  return request.relatedFarm?.name ?? readString(readRecordValue(request.current_snapshot, "name"), "Hof");
+};
+
+const getAdminRequestContactValue = (request: AdminVerificationRequest, key: string) =>
+  (typeof readRecordValue(request.requested_changes, key) === "string"
+    ? readString(readRecordValue(request.requested_changes, key))
+    : typeof readRecordValue(request.current_snapshot, key) === "string"
+      ? readString(readRecordValue(request.current_snapshot, key))
+      : null);
+
+const getAdminApplicantName = (request: AdminVerificationRequest) =>
+  request.requesterProfile?.display_name?.trim() || request.requesterProfile?.id || "Unbekannt";
+
 const getClaimFarmSnapshot = (farm: PublicFarmEntry) => ({
   name: farm.name,
   location: farm.locationText ?? farm.address ?? farm.region ?? null,
@@ -391,6 +422,8 @@ export function FarmerArea() {
   const [profileLoadState, setProfileLoadState] = useState<LoadState>("idle");
   const [requests, setRequests] = useState<VerificationRequestRecord[]>([]);
   const [requestsLoadState, setRequestsLoadState] = useState<LoadState>("idle");
+  const [adminRequests, setAdminRequests] = useState<AdminVerificationRequest[]>([]);
+  const [adminRequestsLoadState, setAdminRequestsLoadState] = useState<LoadState>("idle");
   const [dashboard, setDashboard] = useState<FarmerDashboardData | null>(null);
   const [dashboardLoadState, setDashboardLoadState] = useState<LoadState>("idle");
   const [publicFarms, setPublicFarms] = useState<PublicFarmEntry[]>([]);
@@ -415,7 +448,13 @@ export function FarmerArea() {
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileLoadError, setProfileLoadError] = useState<string | null>(null);
   const [requestsError, setRequestsError] = useState<string | null>(null);
+  const [adminRequestsError, setAdminRequestsError] = useState<string | null>(null);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
+  const [adminFilter, setAdminFilter] = useState<AdminRequestFilter>("all");
+  const [adminMessage, setAdminMessage] = useState<string | null>(null);
+  const [adminAction, setAdminAction] = useState<AdminAction>(null);
+  const [adminActionLoadingId, setAdminActionLoadingId] = useState<string | null>(null);
+  const [adminNotes, setAdminNotes] = useState<Record<string, string>>({});
   const [farmSaveState, setFarmSaveState] = useState<Record<string, boolean>>({});
   const [productSaveState, setProductSaveState] = useState<Record<string, boolean>>({});
   const [openingSaveState, setOpeningSaveState] = useState<Record<string, boolean>>({});
@@ -516,11 +555,17 @@ export function FarmerArea() {
       setProfileLoadState("idle");
       setRequests([]);
       setRequestsLoadState("idle");
+      setAdminRequests([]);
+      setAdminRequestsLoadState("idle");
       setDashboard(null);
       setDashboardLoadState("idle");
       setProfileLoadError(null);
       setRequestsError(null);
+      setAdminRequestsError(null);
       setDashboardError(null);
+      setAdminMessage(null);
+      setAdminAction(null);
+      setAdminActionLoadingId(null);
       setPublicFarmsError(null);
       return;
     }
@@ -582,6 +627,35 @@ export function FarmerArea() {
       }
     };
 
+    const hydrateAdminRequests = async () => {
+      if (profile?.role !== "admin") {
+        setAdminRequests([]);
+        setAdminRequestsLoadState("idle");
+        return;
+      }
+
+      setAdminRequestsLoadState("loading");
+
+      try {
+        const openRequests = await listOpenVerificationRequests();
+
+        if (!cancelled) {
+          setAdminRequests(openRequests);
+        }
+      } catch (error) {
+        logSupabaseError("admin verification_requests", error);
+
+        if (!cancelled) {
+          setAdminRequests([]);
+          setAdminRequestsError("Die offenen Anträge konnten gerade nicht geladen werden.");
+        }
+      } finally {
+        if (!cancelled) {
+          setAdminRequestsLoadState("ready");
+        }
+      }
+    };
+
     const hydrateDashboard = async () => {
       setDashboardLoadState("loading");
 
@@ -609,15 +683,62 @@ export function FarmerArea() {
     setProfileError(null);
     setProfileLoadError(null);
     setRequestsError(null);
+    setAdminRequestsError(null);
+    setAdminMessage(null);
     setDashboardError(null);
     void hydrateProfile();
     void hydrateRequests();
+    void hydrateAdminRequests();
     void hydrateDashboard();
 
     return () => {
       cancelled = true;
     };
   }, [session.user]);
+
+  useEffect(() => {
+    if (!session.user) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const hydrateAdminRequests = async () => {
+      if (profile?.role !== "admin") {
+        setAdminRequests([]);
+        setAdminRequestsLoadState("idle");
+        return;
+      }
+
+      setAdminRequestsLoadState("loading");
+
+      try {
+        const openRequests = await listOpenVerificationRequests();
+
+        if (!cancelled) {
+          setAdminRequests(openRequests);
+        }
+      } catch (error) {
+        logSupabaseError("admin verification_requests", error);
+
+        if (!cancelled) {
+          setAdminRequests([]);
+          setAdminRequestsError("Die offenen Anträge konnten gerade nicht geladen werden.");
+        }
+      } finally {
+        if (!cancelled) {
+          setAdminRequestsLoadState("ready");
+        }
+      }
+    };
+
+    setAdminRequestsError(null);
+    void hydrateAdminRequests();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session.user, profile?.role]);
 
   useEffect(() => {
     if (session.user?.email) {
@@ -719,6 +840,74 @@ export function FarmerArea() {
     setDashboard(dashboardData);
   };
 
+  const refreshAdminRequests = async () => {
+    const openRequests = await listOpenVerificationRequests();
+    setAdminRequests(openRequests);
+  };
+
+  const visibleAdminRequests = useMemo(() => {
+    if (adminFilter === "all") {
+      return adminRequests;
+    }
+
+    return adminRequests.filter((request) => request.request_type === adminFilter);
+  }, [adminFilter, adminRequests]);
+
+  const pendingAdminRequest = useMemo(
+    () => adminRequests.find((request) => request.id === adminAction?.requestId) ?? null,
+    [adminAction?.requestId, adminRequests],
+  );
+
+  const openAdminActionDialog = (requestId: string, type: "approve" | "reject") => {
+    setAdminAction({ requestId, type });
+  };
+
+  const closeAdminActionDialog = () => {
+    if (adminActionLoadingId) {
+      return;
+    }
+
+    setAdminAction(null);
+  };
+
+  const executeAdminAction = async () => {
+    if (!pendingAdminRequest || !adminAction) {
+      return;
+    }
+
+    const adminNote = (adminNotes[pendingAdminRequest.id] ?? pendingAdminRequest.admin_note ?? "").trim() || null;
+
+    if (adminAction.type === "approve" && pendingAdminRequest.request_type !== "claim_existing_farm") {
+      setAdminMessage("Freigabe neuer Höfe folgt im nächsten Schritt.");
+      setAdminAction(null);
+      return;
+    }
+
+    setAdminActionLoadingId(pendingAdminRequest.id);
+    setAdminRequestsError(null);
+    setAdminMessage(null);
+
+    try {
+      if (adminAction.type === "approve") {
+        await approveExistingFarmClaim(pendingAdminRequest.id, adminNote);
+        setAdminMessage(
+          `Antrag für ${getAdminApplicantName(pendingAdminRequest)} zu ${getAdminRequestFarmName(pendingAdminRequest)} wurde freigegeben.`,
+        );
+      } else {
+        await rejectVerificationRequest(pendingAdminRequest.id, adminNote);
+        setAdminMessage(`Antrag für ${getAdminApplicantName(pendingAdminRequest)} wurde abgelehnt.`);
+      }
+
+      await refreshAdminRequests();
+    } catch (error) {
+      logSupabaseError("admin verification_requests", error, ["p_request_id", "p_admin_note"]);
+      setAdminRequestsError(friendlyErrorMessage(error));
+    } finally {
+      setAdminActionLoadingId(null);
+      setAdminAction(null);
+    }
+  };
+
   const handleAuthAction = async () => {
     if (!authEmail.trim()) {
       setAuthError("Bitte gib eine E-Mail-Adresse an.");
@@ -787,6 +976,12 @@ export function FarmerArea() {
       setDashboardLoadState("idle");
       setClaimForm(emptyClaimForm());
       setNewFarmForm(emptyNewFarmForm());
+      setAdminRequests([]);
+      setAdminRequestsLoadState("idle");
+      setAdminRequestsError(null);
+      setAdminMessage(null);
+      setAdminAction(null);
+      setAdminActionLoadingId(null);
     } catch (error) {
       if (import.meta.env.DEV) {
         console.warn("Abmelden fehlgeschlagen", error);
@@ -1558,7 +1753,6 @@ export function FarmerArea() {
                   <h3>{farm.name}</h3>
                 </div>
 
-                <span className="badge open">{roleLabel(profile?.role)}</span>
               </div>
 
               <div className="critical-note">
@@ -2167,13 +2361,207 @@ export function FarmerArea() {
     );
   };
 
+  const renderAdminRequests = () => (
+    <section className="profile-block admin-panel">
+      <div className="section-heading compact-heading">
+        <div>
+          <span className="eyebrow">Adminbereich</span>
+          <h3>Offene Anträge</h3>
+        </div>
+
+        <span className="badge open">{adminRequests.length}</span>
+      </div>
+
+      <div className="admin-toolbar">
+        <div className="admin-filter-row">
+          <button className={adminFilter === "all" ? "chip active" : "chip"} onClick={() => setAdminFilter("all")}>Alle</button>
+          <button
+            className={adminFilter === "claim_existing_farm" ? "chip active" : "chip"}
+            onClick={() => setAdminFilter("claim_existing_farm")}
+          >
+            Bestehender Hof
+          </button>
+          <button
+            className={adminFilter === "register_farm" ? "chip active" : "chip"}
+            onClick={() => setAdminFilter("register_farm")}
+          >
+            Neuer Hof
+          </button>
+        </div>
+
+        <div className="admin-hint">
+          <strong>Hinweis</strong>
+          <p>Freigabe neuer Höfe folgt im nächsten Schritt.</p>
+        </div>
+      </div>
+
+      {adminMessage && <p className="form-success">{adminMessage}</p>}
+      {adminRequestsError && <p className="form-error">{adminRequestsError}</p>}
+
+      {adminRequestsLoadState === "loading" ? (
+        <div className="empty-state">Offene Anträge werden geladen…</div>
+      ) : visibleAdminRequests.length === 0 ? (
+        <div className="empty-state">Keine offenen Anträge vorhanden.</div>
+      ) : (
+        <div className="admin-request-list">
+          {visibleAdminRequests.map((request) => {
+            const farmName = getAdminRequestFarmName(request);
+            const applicantEmail = request.applicantEmail ?? getAdminRequestContactValue(request, "email") ?? "Nicht angegeben";
+            const applicantPhone = getAdminRequestContactValue(request, "phone") ?? request.requesterProfile?.phone ?? "Nicht angegeben";
+            const message = getAdminRequestContactValue(request, "message") ?? "Keine Nachricht angegeben";
+            const farmAddress = request.request_type === "claim_existing_farm"
+              ? [request.relatedFarm?.address, request.relatedFarm?.postal_code, request.relatedFarm?.city].filter(Boolean).join(", ") || "Nicht angegeben"
+              : [
+                  getAdminRequestContactValue(request, "street"),
+                  getAdminRequestContactValue(request, "postal_code"),
+                  getAdminRequestContactValue(request, "city"),
+                ].filter(Boolean).join(", ") || "Nicht angegeben";
+            const farmContact = request.request_type === "claim_existing_farm"
+              ? [request.relatedFarm?.phone, request.relatedFarm?.whatsapp, request.relatedFarm?.email].filter(Boolean).join(" · ") || "Keine Angabe"
+              : [getAdminRequestContactValue(request, "phone"), getAdminRequestContactValue(request, "whatsapp"), getAdminRequestContactValue(request, "email")]
+                  .filter(Boolean)
+                  .join(" · ") || "Keine Angabe";
+            const adminNoteValue = adminNotes[request.id] ?? request.admin_note ?? "";
+            const isProcessing = adminActionLoadingId === request.id;
+            const isRegisterFarm = request.request_type === "register_farm";
+
+            return (
+              <article className="request-card admin-request-card" key={request.id}>
+                <div className="request-card-header">
+                  <div>
+                    <strong>{requestTypeLabel(request.request_type)}</strong>
+                    <p>{farmName}</p>
+                  </div>
+
+                  <span className={`badge request-status ${request.status}`}>{requestStatusLabel(request.status)}</span>
+                </div>
+
+                <div className="admin-request-grid">
+                  <div>
+                    <span>Antragsteller</span>
+                    <strong>{getAdminApplicantName(request)}</strong>
+                  </div>
+                  <div>
+                    <span>E-Mail</span>
+                    <strong>{applicantEmail}</strong>
+                  </div>
+                  <div>
+                    <span>Telefon</span>
+                    <strong>{applicantPhone}</strong>
+                  </div>
+                  <div>
+                    <span>Eingangsdatum</span>
+                    <strong>{formatDate(request.created_at)}</strong>
+                  </div>
+                </div>
+
+                <div className="detail-card admin-detail-card">
+                  <h4>{isRegisterFarm ? "Vorgeschlagene Hofdaten" : "Bestehender Hof"}</h4>
+                  <div className="admin-request-grid">
+                    <div>
+                      <span>Adresse</span>
+                      <strong>{farmAddress}</strong>
+                    </div>
+                    <div>
+                      <span>Kontakt</span>
+                      <strong>{farmContact}</strong>
+                    </div>
+                    <div className="admin-grid-wide">
+                      <span>Nachricht</span>
+                      <strong>{message}</strong>
+                    </div>
+                  </div>
+
+                  {isRegisterFarm && <p className="location-note">Freigabe neuer Höfe folgt im nächsten Schritt.</p>}
+                </div>
+
+                <label className="field field-wide">
+                  <span>Adminnotiz</span>
+                  <textarea
+                    rows={3}
+                    value={adminNoteValue}
+                    onChange={(event) =>
+                      setAdminNotes((current) => ({
+                        ...current,
+                        [request.id]: event.target.value,
+                      }))
+                    }
+                    placeholder="Optionaler Vermerk zur Entscheidung"
+                  />
+                </label>
+
+                {request.admin_note && (
+                  <p className="request-note">
+                    <strong>Vorhandene Notiz:</strong> {request.admin_note}
+                  </p>
+                )}
+
+                <div className="action-row">
+                  <button
+                    className="primary-button"
+                    onClick={() => openAdminActionDialog(request.id, "approve")}
+                    disabled={isProcessing || isRegisterFarm}
+                    title={isRegisterFarm ? "Freigabe neuer Höfe folgt im nächsten Schritt" : undefined}
+                  >
+                    {isProcessing ? "Bitte warten…" : "Freigeben"}
+                  </button>
+                  <button
+                    className="secondary-button"
+                    onClick={() => openAdminActionDialog(request.id, "reject")}
+                    disabled={isProcessing}
+                  >
+                    {isProcessing ? "Bitte warten…" : "Ablehnen"}
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+
+  const renderAdminActionDialog = () => {
+    if (!adminAction || !pendingAdminRequest) {
+      return null;
+    }
+
+    const isApprove = adminAction.type === "approve";
+    const applicantName = getAdminApplicantName(pendingAdminRequest);
+    const farmName = getAdminRequestFarmName(pendingAdminRequest);
+
+    return (
+      <div className="admin-dialog-backdrop" onClick={closeAdminActionDialog}>
+        <div className="admin-dialog" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+          <span className="eyebrow">{isApprove ? "Freigabe bestätigen" : "Ablehnung bestätigen"}</span>
+          <h3>{isApprove ? "Bestehenden Hof freigeben" : "Antrag ablehnen"}</h3>
+          <p>
+            {isApprove
+              ? `${applicantName} wird dem Hof ${farmName} zugeordnet.`
+              : `${applicantName} erhält eine Ablehnung für den Antrag auf ${farmName}.`}
+          </p>
+          <p className="muted-text">Die Aktion wird erst nach deiner Bestätigung ausgeführt.</p>
+
+          <div className="action-row">
+            <button className="primary-button" onClick={executeAdminAction} disabled={Boolean(adminActionLoadingId)}>
+              {isApprove ? "Freigeben" : "Ablehnen"}
+            </button>
+            <button className="secondary-button" onClick={closeAdminActionDialog} disabled={Boolean(adminActionLoadingId)}>
+              Abbrechen
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="farmer-area">
       {!isSupabaseConfigured && (
         <section className="profile-block">
           <div className="section-heading compact-heading">
             <div>
-              <span className="eyebrow">Dein Hof bei NahVersorgt</span>
+              <span className="eyebrow">Mein Bereich</span>
               <h3>Supabase nicht konfiguriert</h3>
             </div>
           </div>
@@ -2187,7 +2575,7 @@ export function FarmerArea() {
           <section className="profile-block">
             <div className="section-heading compact-heading">
               <div>
-                <span className="eyebrow">Dein Hof bei NahVersorgt</span>
+                <span className="eyebrow">{profile?.role === "admin" ? "Adminbereich" : "Mein Bereich"}</span>
                 <h3>{profile?.display_name?.trim() || session.user.email || ""}</h3>
               </div>
 
@@ -2200,8 +2588,8 @@ export function FarmerArea() {
 
             {profile?.role === "admin" ? (
               <div className="detail-card">
-                <h4>Adminzugang</h4>
-                <p>Die vollständige Adminoberfläche folgt in einem späteren Schritt.</p>
+                <h4>Freigaben und Prüfungen</h4>
+                <p>Bestehende Hofanträge werden hier über sichere Serverfunktionen geprüft und freigegeben.</p>
               </div>
             ) : profile?.role === "farmer_verified" ? (
               <div className="detail-card">
@@ -2229,7 +2617,7 @@ export function FarmerArea() {
             </button>
           </section>
 
-          {renderRequests()}
+          {profile?.role === "admin" ? renderAdminRequests() : renderRequests()}
 
           {profile?.role === "farmer_verified" && renderVerifiedDashboard()}
         </>
@@ -2238,7 +2626,7 @@ export function FarmerArea() {
           <section className="profile-block">
             <div className="section-heading compact-heading">
               <div>
-                <span className="eyebrow">Dein Hof bei NahVersorgt</span>
+                <span className="eyebrow">NahVersorgt</span>
                 <h3>Registrierung und Login</h3>
               </div>
             </div>
@@ -2268,6 +2656,8 @@ export function FarmerArea() {
           </div>
         </section>
       )}
+
+      {renderAdminActionDialog()}
     </div>
   );
 }
