@@ -27,6 +27,10 @@ select {
   font: inherit;
 }
 
+textarea {
+  font: inherit;
+}
+
 button {
   cursor: pointer;
 }
@@ -280,6 +284,237 @@ h1 {
 .map-popup p {
   margin: 0;
   color: #5e665f;
+}
+
+.profile-view {
+  display: grid;
+  gap: 18px;
+}
+
+.farmer-area {
+  display: grid;
+  gap: 18px;
+}
+
+.profile-block {
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+  border: 1px solid rgba(23, 62, 42, 0.08);
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 14px 36px rgba(23, 62, 42, 0.08);
+}
+
+.compact-heading {
+  margin-bottom: 0;
+}
+
+.auth-block,
+.form-card,
+.detail-card,
+.editable-item,
+.request-card {
+  border: 1px solid rgba(23, 62, 42, 0.08);
+  border-radius: 22px;
+  background: rgba(247, 244, 236, 0.55);
+}
+
+.detail-card,
+.request-card,
+.editable-item,
+.form-card {
+  padding: 16px;
+}
+
+.auth-cta-row,
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.auth-switcher {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.chip {
+  min-height: 42px;
+  padding: 10px 14px;
+  border: 1px solid rgba(23, 62, 42, 0.14);
+  border-radius: 999px;
+  background: white;
+  color: #173e2a;
+  font-weight: 700;
+}
+
+.chip.active {
+  border-color: #355f35;
+  background: #355f35;
+  color: white;
+}
+
+.auth-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.field-wide {
+  grid-column: 1 / -1;
+}
+
+.field span,
+.checkbox-row span,
+.read-only-grid span {
+  color: #6c746e;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 14px;
+  border: 1px solid rgba(23, 62, 42, 0.14);
+  border-radius: 14px;
+  background: white;
+  color: #173e2a;
+}
+
+.field textarea {
+  min-height: 110px;
+  resize: vertical;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+}
+
+.inline-checkbox {
+  align-self: end;
+}
+
+.claim-results {
+  display: grid;
+  gap: 10px;
+}
+
+.claim-result {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid rgba(23, 62, 42, 0.12);
+  border-radius: 18px;
+  background: white;
+  text-align: left;
+}
+
+.claim-result.active {
+  border-color: #355f35;
+  background: #eef5e2;
+}
+
+.claim-result span,
+.request-date,
+.request-note,
+.detail-card p,
+.critical-note p {
+  color: #5e665f;
+}
+
+.request-list,
+.editable-list,
+.dashboard-list {
+  display: grid;
+  gap: 12px;
+}
+
+.request-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.request-status.pending {
+  background: #edf0e4;
+  color: #506432;
+}
+
+.request-status.approved {
+  background: #e7efd8;
+  color: #3c652c;
+}
+
+.request-status.rejected {
+  background: #f2e3dc;
+  color: #985039;
+}
+
+.read-only-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.read-only-grid div {
+  display: grid;
+  gap: 4px;
+}
+
+.read-only-grid strong {
+  color: #173e2a;
+}
+
+.critical-note {
+  padding: 14px 16px;
+  border-left: 4px solid #d76843;
+  border-radius: 16px;
+  background: #fff7f2;
+}
+
+.subsection {
+  display: grid;
+  gap: 12px;
+}
+
+.editable-item {
+  display: grid;
+  gap: 14px;
+}
+
+.form-error {
+  color: #985039;
+  font-weight: 700;
+}
+
+.form-success {
+  color: #3c652c;
+  font-weight: 700;
+}
+
+.empty-state {
+  padding: 14px 16px;
+  border: 1px dashed rgba(23, 62, 42, 0.16);
+  border-radius: 18px;
+  color: #6c746e;
+  background: rgba(255, 255, 255, 0.75);
 }
 
 .popup-button {
@@ -572,6 +807,11 @@ h1 {
     align-items: flex-start;
   }
 
+  .auth-grid,
+  .read-only-grid {
+    grid-template-columns: 1fr;
+  }
+
   .farm-card {
     grid-template-columns: 112px 1fr;
     border-radius: 22px;
@@ -597,6 +837,11 @@ h1 {
   .farm-actions,
   .detail-actions,
   .map-popup-actions {
+    flex-direction: column;
+  }
+
+  .auth-cta-row,
+  .action-row {
     flex-direction: column;
   }
 

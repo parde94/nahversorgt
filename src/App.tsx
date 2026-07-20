@@ -4,6 +4,7 @@ import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 import heroImage from "./assets/hero.png";
 import farmData from "./data/nahversorgt-data.json";
+import FarmerArea from "./components/FarmerArea";
 import { loadFarms } from "./services/farmService";
 import "leaflet/dist/leaflet.css";
 import "react-leaflet-cluster/dist/assets/MarkerCluster.css";
@@ -1087,15 +1088,11 @@ function App() {
             <div className="section-heading">
               <div>
                 <span className="eyebrow">Mein Bereich</span>
-                <h2>Dein Profil</h2>
+                <h2>Dein Hof bei NahVersorgt</h2>
               </div>
             </div>
 
-            <div className="profile-list">
-              <div className="profile-card">Als Hof registrieren</div>
-              <div className="profile-card">Benachrichtigungen</div>
-              <div className="profile-card">Meine Einstellungen</div>
-            </div>
+            <FarmerArea />
           </section>
         )}
 

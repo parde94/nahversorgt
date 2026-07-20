@@ -10,7 +10,9 @@ const hasSupabaseConfig = Boolean(supabaseUrl && supabasePublishableKey);
 export const supabase: SupabaseClient | null = hasSupabaseConfig
   ? createClient(supabaseUrl as string, supabasePublishableKey as string, {
       auth: {
-        persistSession: false,
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
       },
     })
   : null;

@@ -7,6 +7,7 @@ type FarmSourceEntry = {
   region?: string;
   locationText?: string;
   address?: string;
+  email?: string | null;
   products: string[];
   productCategories: string[];
   delivery: boolean;
@@ -31,6 +32,7 @@ type DbFarmRow = {
   region: string | null;
   location_text: string | null;
   address: string | null;
+  email: string | null;
   phone: string | null;
   whatsapp: string | null;
   website: string | null;
@@ -174,7 +176,7 @@ const fetchSupabaseFarms = async (): Promise<FarmSourceEntry[]> => {
   const { data: farmsData, error: farmsError } = await supabase
     .from("farms")
     .select(
-      "id, legacy_source_id, name, region, location_text, address, phone, whatsapp, website, delivery, delivery_radius_km, latitude, longitude, description",
+      "id, legacy_source_id, name, region, location_text, address, email, phone, whatsapp, website, delivery, delivery_radius_km, latitude, longitude, description",
     )
     .eq("published", true)
     .eq("approval_state", "approved")
@@ -268,6 +270,7 @@ const fetchSupabaseFarms = async (): Promise<FarmSourceEntry[]> => {
       region: farm.region ?? undefined,
       locationText: farm.location_text ?? undefined,
       address: farm.address ?? undefined,
+      email: farm.email,
       products: productNames,
       productCategories: categories,
       delivery: farm.delivery,
