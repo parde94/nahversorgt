@@ -149,6 +149,42 @@ const emptyOpeningHourDraft = (): OpeningHourDraft => ({
   sortOrder: "0",
 });
 
+type LoadState = "idle" | "loading" | "ready";
+
+const getSupabaseErrorDetails = (error: unknown) => {
+  if (error && typeof error === "object") {
+    const typedError = error as {
+      code?: unknown;
+      message?: unknown;
+    };
+
+    return {
+      code: typeof typedError.code === "string" ? typedError.code : null,
+      message: typeof typedError.message === "string" ? typedError.message : String(error),
+    };
+  }
+
+  return {
+    code: null,
+    message: String(error),
+  };
+};
+
+const logSupabaseError = (tableName: string, error: unknown) => {
+  if (!import.meta.env.DEV) {
+    return;
+  }
+
+  const { code, message } = getSupabaseErrorDetails(error);
+
+  console.warn(`Supabase-Fehler bei ${tableName}`, {
+    table: tableName,
+    code,
+    message,
+    error,
+  });
+};
+
 const formatDate = (value: string) =>
   new Intl.DateTimeFormat("de-DE", {
     dateStyle: "medium",
@@ -342,9 +378,13 @@ const updateOpeningHourDraft = (
 export function FarmerArea() {
   const [session, setSession] = useState<SessionState>({ user: null });
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [profileLoadState, setProfileLoadState] = useState<LoadState>("idle");
   const [requests, setRequests] = useState<VerificationRequestRecord[]>([]);
+  const [requestsLoadState, setRequestsLoadState] = useState<LoadState>("idle");
   const [dashboard, setDashboard] = useState<FarmerDashboardData | null>(null);
+  const [dashboardLoadState, setDashboardLoadState] = useState<LoadState>("idle");
   const [publicFarms, setPublicFarms] = useState<PublicFarmEntry[]>([]);
+  const [publicFarmsError, setPublicFarmsError] = useState<string | null>(null);
   const [authMode, setAuthMode] = useState<AuthMode>("signin");
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
@@ -363,14 +403,14 @@ export function FarmerArea() {
   const [newFarmLoading, setNewFarmLoading] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileLoadError, setProfileLoadError] = useState<string | null>(null);
+  const [requestsError, setRequestsError] = useState<string | null>(null);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
   const [farmSaveState, setFarmSaveState] = useState<Record<string, boolean>>({});
   const [productSaveState, setProductSaveState] = useState<Record<string, boolean>>({});
   const [openingSaveState, setOpeningSaveState] = useState<Record<string, boolean>>({});
   const [newProductForms, setNewProductForms] = useState<Record<string, ProductDraft>>({});
   const [newOpeningForms, setNewOpeningForms] = useState<Record<string, OpeningHourDraft>>({});
-  const [dashboardLoadState, setDashboardLoadState] = useState<"idle" | "loading" | "ready">(
-    "idle",
-  );
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -422,6 +462,7 @@ export function FarmerArea() {
 
     const loadPublicFarms = async () => {
       try {
+        setPublicFarmsError(null);
         const farms = await loadFarms();
 
         if (!cancelled) {
@@ -443,8 +484,10 @@ export function FarmerArea() {
           );
         }
       } catch (error) {
-        if (import.meta.env.DEV) {
-          console.warn("Öffentliche Höfe konnten nicht geladen werden", error);
+        logSupabaseError("farms", error);
+
+        if (!cancelled) {
+          setPublicFarmsError("Die Hofsuche konnte gerade nicht geladen werden.");
         }
       }
     };
@@ -459,18 +502,29 @@ export function FarmerArea() {
   useEffect(() => {
     if (!session.user) {
       setProfile(null);
+      setProfileLoadState("idle");
       setRequests([]);
+      setRequestsLoadState("idle");
       setDashboard(null);
       setDashboardLoadState("idle");
+      setProfileLoadError(null);
+      setRequestsError(null);
+      setDashboardError(null);
+      setPublicFarmsError(null);
       return;
     }
 
     let cancelled = false;
 
-    const hydrateUserData = async () => {
-      setProfileMessage(null);
-      setProfileError(null);
-      setDashboardLoadState("loading");
+    const fallbackProfile = {
+      id: session.user.id,
+      display_name: session.user.email,
+      phone: null,
+      role: "farmer_pending",
+    } satisfies UserProfile;
+
+    const hydrateProfile = async () => {
+      setProfileLoadState("loading");
 
       try {
         const currentProfile = await getCurrentProfile(session.user!.id);
@@ -479,45 +533,59 @@ export function FarmerArea() {
           return;
         }
 
-        const resolvedProfile =
-          currentProfile ??
-          ({
-            id: session.user!.id,
-            display_name: session.user!.email,
-            phone: null,
-            role: "farmer_pending",
-          } as UserProfile);
+        setProfile(currentProfile ?? fallbackProfile);
+      } catch (error) {
+        logSupabaseError("profiles", error);
 
-        setProfile(resolvedProfile);
+        if (!cancelled) {
+          setProfile(fallbackProfile);
+          setProfileLoadError("Das Profil konnte gerade nicht geladen werden.");
+        }
+      } finally {
+        if (!cancelled) {
+          setProfileLoadState("ready");
+        }
+      }
+    };
 
+    const hydrateRequests = async () => {
+      setRequestsLoadState("loading");
+
+      try {
         const myRequests = await listMyVerificationRequests(session.user!.id);
 
         if (!cancelled) {
           setRequests(myRequests);
         }
-
-        if (resolvedProfile.role === "farmer_verified") {
-          const dashboardData = await getFarmerDashboardData(session.user!.id);
-
-          if (!cancelled) {
-            setDashboard(dashboardData);
-          }
-        } else {
-          if (!cancelled) {
-            setDashboard(null);
-          }
-        }
+      } catch (error) {
+        logSupabaseError("verification_requests", error);
 
         if (!cancelled) {
-          setProfileMessage(null);
+          setRequests([]);
+          setRequestsError("Deine Anträge konnten gerade nicht geladen werden.");
+        }
+      } finally {
+        if (!cancelled) {
+          setRequestsLoadState("ready");
+        }
+      }
+    };
+
+    const hydrateDashboard = async () => {
+      setDashboardLoadState("loading");
+
+      try {
+        const dashboardData = await getFarmerDashboardData(session.user!.id);
+
+        if (!cancelled) {
+          setDashboard(dashboardData);
         }
       } catch (error) {
-        if (import.meta.env.DEV) {
-          console.warn("Benutzerdaten konnten nicht geladen werden", error);
-        }
+        logSupabaseError("farm_owners / products / opening_hours", error);
 
         if (!cancelled) {
-          setProfileError("Dein Bereich konnte gerade nicht geladen werden.");
+          setDashboard(null);
+          setDashboardError("Dein Hofbereich konnte gerade nicht geladen werden.");
         }
       } finally {
         if (!cancelled) {
@@ -526,7 +594,14 @@ export function FarmerArea() {
       }
     };
 
-    void hydrateUserData();
+    setProfileMessage(null);
+    setProfileError(null);
+    setProfileLoadError(null);
+    setRequestsError(null);
+    setDashboardError(null);
+    void hydrateProfile();
+    void hydrateRequests();
+    void hydrateDashboard();
 
     return () => {
       cancelled = true;
@@ -700,6 +775,10 @@ export function FarmerArea() {
       return;
     }
 
+    if (claimLoading) {
+      return;
+    }
+
     if (!claimForm.message.trim()) {
       setClaimError("Bitte gib eine kurze Nachricht an.");
       return;
@@ -721,13 +800,16 @@ export function FarmerArea() {
         currentSnapshot: getClaimFarmSnapshot(selectedClaimFarm),
       });
 
-      await refreshRequests(session.user.id);
+      try {
+        await refreshRequests(session.user.id);
+      } catch (refreshError) {
+        logSupabaseError("verification_requests", refreshError);
+      }
+
       setClaimMessage("Dein Antrag wurde an die Prüfung übergeben.");
       setClaimForm((current) => ({ ...current, message: "", phone: "" }));
     } catch (error) {
-      if (import.meta.env.DEV) {
-        console.warn("Claim-Antrag fehlgeschlagen", error);
-      }
+      logSupabaseError("verification_requests", error);
 
       setClaimError(friendlyErrorMessage(error));
     } finally {
@@ -738,6 +820,10 @@ export function FarmerArea() {
   const submitNewFarmRequest = async () => {
     if (!session.user) {
       setNewFarmError("Bitte melde dich zuerst an.");
+      return;
+    }
+
+    if (newFarmLoading) {
       return;
     }
 
@@ -778,13 +864,16 @@ export function FarmerArea() {
         },
       });
 
-      await refreshRequests(session.user.id);
+      try {
+        await refreshRequests(session.user.id);
+      } catch (refreshError) {
+        logSupabaseError("verification_requests", refreshError);
+      }
+
       setNewFarmMessage("Deine Meldung wurde zur Prüfung eingereicht.");
       setNewFarmForm(emptyNewFarmForm());
     } catch (error) {
-      if (import.meta.env.DEV) {
-        console.warn("Neuer Hof konnte nicht gemeldet werden", error);
-      }
+      logSupabaseError("verification_requests", error);
 
       setNewFarmError(friendlyErrorMessage(error));
     } finally {
@@ -1022,7 +1111,9 @@ export function FarmerArea() {
         </div>
       </div>
 
-      {requests.length === 0 ? (
+      {requestsLoadState === "loading" ? (
+        <div className="empty-state">Anträge werden geladen…</div>
+      ) : requests.length === 0 ? (
         <div className="empty-state">Noch keine Anträge vorhanden.</div>
       ) : (
         <div className="request-list">
@@ -1050,6 +1141,8 @@ export function FarmerArea() {
           ))}
         </div>
       )}
+
+      {requestsLoadState === "ready" && requestsError && <p className="form-error">{requestsError}</p>}
     </section>
   );
 
@@ -1132,6 +1225,8 @@ export function FarmerArea() {
           </button>
         ))}
       </div>
+
+      {publicFarmsError && <p className="form-error">{publicFarmsError}</p>}
 
       {selectedClaimFarm && (
         <div className="detail-card claim-preview">
@@ -1344,6 +1439,22 @@ export function FarmerArea() {
   const renderVerifiedDashboard = () => {
     if (dashboardLoadState === "loading") {
       return <div className="empty-state">Farmer-Dashboard wird geladen…</div>;
+    }
+
+    if (dashboardLoadState === "ready" && !dashboard) {
+      return (
+        <section className="profile-block">
+          <div className="section-heading compact-heading">
+            <div>
+              <span className="eyebrow">Dein Hof</span>
+              <h3>Hofbereich nicht verfügbar</h3>
+            </div>
+          </div>
+
+          <p>Deine Hofdaten konnten gerade nicht geladen werden. Die restlichen Bereiche bleiben verfügbar.</p>
+          {dashboardError && <p className="form-error">{dashboardError}</p>}
+        </section>
+      );
     }
 
     if (!dashboard || verifiedOwnedFarms.length === 0) {
@@ -1990,8 +2101,6 @@ export function FarmerArea() {
     );
   };
 
-  const role = profile?.role ?? null;
-
   return (
     <div className="farmer-area">
       {!isSupabaseConfigured && (
@@ -2013,11 +2122,15 @@ export function FarmerArea() {
             <div className="section-heading compact-heading">
               <div>
                 <span className="eyebrow">Dein Hof bei NahVersorgt</span>
-                <h3>{session.user.email ?? "Angemeldeter Benutzer"}</h3>
+                <h3>{profile?.display_name?.trim() || session.user.email || ""}</h3>
               </div>
 
-              <span className={`badge request-status ${role ?? "pending"}`}>{roleLabel(role)}</span>
+              <span className={`badge request-status ${profile?.role ?? "farmer_pending"}`}>
+                {roleLabel(profile?.role ?? "farmer_pending")}
+              </span>
             </div>
+
+            <p className="muted-text">{session.user.email}</p>
 
             {profile?.role === "admin" ? (
               <div className="detail-card">
@@ -2040,8 +2153,10 @@ export function FarmerArea() {
               </>
             )}
 
+            {profileLoadError && <p className="form-error">{profileLoadError}</p>}
             {profileError && <p className="form-error">{profileError}</p>}
             {profileMessage && <p className="form-success">{profileMessage}</p>}
+            {profileLoadState === "loading" && <p className="muted-text">Profil wird geladen…</p>}
 
             <button className="secondary-button" onClick={handleSignOut} disabled={authLoading}>
               {authLoading ? "Bitte warten…" : "Abmelden"}
