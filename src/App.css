@@ -819,6 +819,20 @@ h1 {
   color: #173e2a;
 }
 
+.farm-image-actions {
+  align-items: stretch;
+}
+
+.danger-button {
+  border-color: #985039;
+  color: #985039;
+  background: #fff4ef;
+}
+
+.danger-button:disabled {
+  opacity: 0.7;
+}
+
 .farm-card-content {
   padding: 24px;
 }

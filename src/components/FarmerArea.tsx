@@ -1518,9 +1518,7 @@ export function FarmerArea({ onPublicFarmsChanged }: FarmerAreaProps) {
   };
 
   const removeFarmImage = async (farmName: string, image: FarmerFarmImageRecord) => {
-    const label = image.caption?.trim() || image.storage_path.split("/").pop() || "Bild";
-
-    if (!window.confirm(`Bild "${label}" von ${farmName} wirklich löschen?`)) {
+    if (!window.confirm(`Möchtest du dieses Bild von ${farmName} wirklich löschen?`)) {
       return;
     }
 
@@ -1939,9 +1937,6 @@ export function FarmerArea({ onPublicFarmsChanged }: FarmerAreaProps) {
           const openingHours = dashboard.openingHoursByFarmId[farm.id] ?? [];
           const farmImages = dashboard.imagesByFarmId[farm.id] ?? [];
           const primaryImage = farmImages.find((image) => image.is_primary) ?? farmImages[0] ?? null;
-          const previewImages = primaryImage
-            ? farmImages.filter((image) => image.id !== primaryImage.id)
-            : farmImages;
 
           return (
             <section className="profile-block dashboard-card" key={farm.id}>
@@ -2577,9 +2572,9 @@ export function FarmerArea({ onPublicFarmsChanged }: FarmerAreaProps) {
                   )}
                 </div>
 
-                {previewImages.length > 0 && (
+                {farmImages.length > 0 && (
                   <div className="farm-image-grid">
-                    {previewImages.map((image) => (
+                    {farmImages.map((image) => (
                       <article className="farm-image-card" key={image.id}>
                         <img src={image.publicUrl} alt={image.caption?.trim() || farm.name} />
                         <div className="farm-image-card-body">
@@ -2620,13 +2615,13 @@ export function FarmerArea({ onPublicFarmsChanged }: FarmerAreaProps) {
                             </label>
                           </div>
 
-                          <div className="action-row">
+                          <div className="action-row farm-image-actions">
                             <button
                               className="secondary-button"
                               onClick={() => saveFarmImage(image)}
                               disabled={imageSaveState[image.id]}
                             >
-                              {imageSaveState[image.id] ? "Bitte warten…" : "Speichern"}
+                              {imageSaveState[image.id] ? "Bitte warten…" : "Beschreibung bearbeiten"}
                             </button>
                             {!image.is_primary && (
                               <button
@@ -2638,11 +2633,11 @@ export function FarmerArea({ onPublicFarmsChanged }: FarmerAreaProps) {
                               </button>
                             )}
                             <button
-                              className="text-button"
+                              className="secondary-button danger-button"
                               onClick={() => removeFarmImage(farm.name, image)}
                               disabled={imageSaveState[`delete-${image.id}`]}
                             >
-                              {imageSaveState[`delete-${image.id}`] ? "Bitte warten…" : "Löschen"}
+                              {imageSaveState[`delete-${image.id}`] ? "Bitte warten…" : "Bild löschen"}
                             </button>
                           </div>
                         </div>
