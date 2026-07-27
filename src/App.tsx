@@ -1,11 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
 import L from "leaflet";
-import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
+import { MapContainer, Marker, Polyline, Popup, TileLayer, useMap } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 import heroImage from "./assets/hero.png";
 import farmData from "./data/nahversorgt-data.json";
 import FarmerArea from "./components/FarmerArea";
 import { loadFarms } from "./services/farmService";
+import {
+  geocodeSingleLocation,
+  getGeocodingProviderConfiguration,
+  reverseGeocodeLocation,
+  searchGeocodingLocations,
+  type GeocodingLocation,
+} from "./services/geocodingService";
+import {
+  getDistanceToRouteKm,
+  getRouteBetweenPoints,
+  getRoutingConfiguration,
+  type RoutePoint,
+} from "./services/routingService";
 import "leaflet/dist/leaflet.css";
 import "react-leaflet-cluster/dist/assets/MarkerCluster.css";
 import "react-leaflet-cluster/dist/assets/MarkerCluster.Default.css";
@@ -42,6 +55,7 @@ type FarmSourceEntry = {
   lng?: number | string | null;
   coordinates?: unknown;
   image?: string | null;
+  selfService?: boolean;
 };
 
 type Farm = {
@@ -61,8 +75,28 @@ type Farm = {
   openingHoursStatus?: string;
   openingHoursNote?: string;
   openingHoursOverview?: OpeningHoursOverviewEntry[];
+  openingState: "open" | "closed" | "unknown";
   image: string;
+  selfService: boolean;
   coordinates: GeoCoordinates | null;
+};
+
+type DiscoveryMode = "nearby" | "route";
+
+type RouteOpeningFilter = "all" | "open_now" | "self_service";
+
+type RouteField = "start" | "target";
+
+type RouteFarmResult = Farm & {
+  distanceToRouteKm: number;
+};
+
+type SavedRouteSearch = {
+  corridorKm: number;
+  selectedCategories: string[];
+  openingFilter: RouteOpeningFilter;
+  start: GeocodingLocation | null;
+  target: GeocodingLocation | null;
 };
 
 type View = "start" | "discover" | "favorites" | "profile" | "details";
@@ -535,6 +569,46 @@ const userMarkerIcon = L.divIcon({
   popupAnchor: [0, -22],
 });
 
+const routeStartMarkerIcon = L.divIcon({
+  className: "route-start-marker",
+  html: '<span class="map-pin map-pin-route-start"></span>',
+  iconSize: [22, 22],
+  iconAnchor: [11, 22],
+  popupAnchor: [0, -22],
+});
+
+const routeEndMarkerIcon = L.divIcon({
+  className: "route-end-marker",
+  html: '<span class="map-pin map-pin-route-end"></span>',
+  iconSize: [22, 22],
+  iconAnchor: [11, 22],
+  popupAnchor: [0, -22],
+});
+
+const routeFarmOpenMarkerIcon = L.divIcon({
+  className: "route-farm-open-marker",
+  html: '<span class="map-pin map-pin-route-open"></span>',
+  iconSize: [22, 22],
+  iconAnchor: [11, 22],
+  popupAnchor: [0, -22],
+});
+
+const routeFarmClosedMarkerIcon = L.divIcon({
+  className: "route-farm-closed-marker",
+  html: '<span class="map-pin map-pin-route-closed"></span>',
+  iconSize: [22, 22],
+  iconAnchor: [11, 22],
+  popupAnchor: [0, -22],
+});
+
+const routeFarmUnknownMarkerIcon = L.divIcon({
+  className: "route-farm-unknown-marker",
+  html: '<span class="map-pin map-pin-route-unknown"></span>',
+  iconSize: [22, 22],
+  iconAnchor: [11, 22],
+  popupAnchor: [0, -22],
+});
+
 const getFarmCategories = (productCategories: string[]) => {
   const categorySet = new Set<string>();
   const normalized = productCategories.map((item) => item.toLowerCase());
@@ -605,6 +679,12 @@ const fallbackFarmEntries = (farmData as { farms: FarmSourceEntry[] }).farms;
 const mapFarmSourceEntriesToFarms = (entries: FarmSourceEntry[]): Farm[] => {
   return entries.map((farm) => {
     const openingHoursInfo = parseOpeningHoursInfo(farm.openingHoursText);
+    const openingState =
+      openingHoursInfo.openNow === true
+        ? "open"
+        : openingHoursInfo.openNow === false
+          ? "closed"
+          : "unknown";
 
     return {
       id: farm.id,
@@ -623,13 +703,18 @@ const mapFarmSourceEntriesToFarms = (entries: FarmSourceEntry[]): Farm[] => {
       openingHoursStatus: openingHoursInfo.statusText,
       openingHoursNote: openingHoursInfo.specialNote ?? undefined,
       openingHoursOverview: openingHoursInfo.weeklyOverview,
+      openingState,
       image: farm.image ?? heroImage,
+      selfService: farm.selfService === true,
       coordinates: extractFarmCoordinates(farm),
     };
   });
 };
 
 const fallbackFarms = mapFarmSourceEntriesToFarms(fallbackFarmEntries);
+
+const ROUTE_SEARCH_STORAGE_KEY = "nahversorgt-route-search-v1";
+const ROUTE_CORRIDOR_OPTIONS_KM = [5, 10, 15, 20, 30, 40, 50] as const;
 
 function App() {
   const [farms, setFarms] = useState<Farm[]>(fallbackFarms);
@@ -646,6 +731,27 @@ function App() {
   >("idle");
   const [activeView, setActiveView] = useState<View>("start");
   const [selectedFarmId, setSelectedFarmId] = useState<string | null>(null);
+  const [discoverMode, setDiscoverMode] = useState<DiscoveryMode>("nearby");
+  const [routeStartQuery, setRouteStartQuery] = useState("");
+  const [routeTargetQuery, setRouteTargetQuery] = useState("");
+  const [routeStartLocation, setRouteStartLocation] = useState<GeocodingLocation | null>(null);
+  const [routeTargetLocation, setRouteTargetLocation] = useState<GeocodingLocation | null>(null);
+  const [routeStartSuggestions, setRouteStartSuggestions] = useState<GeocodingLocation[]>([]);
+  const [routeTargetSuggestions, setRouteTargetSuggestions] = useState<GeocodingLocation[]>([]);
+  const [routeSuggestionsLoadingField, setRouteSuggestionsLoadingField] =
+    useState<RouteField | null>(null);
+  const [routeCorridorKm, setRouteCorridorKm] = useState<number>(10);
+  const [routeOpeningFilter, setRouteOpeningFilter] = useState<RouteOpeningFilter>("all");
+  const [routeLoading, setRouteLoading] = useState(false);
+  const [routeError, setRouteError] = useState<string | null>(null);
+  const [routeMessage, setRouteMessage] = useState<string | null>(null);
+  const [routeCoordinates, setRouteCoordinates] = useState<RoutePoint[]>([]);
+  const [routeDistanceKm, setRouteDistanceKm] = useState<number | null>(null);
+  const [routeDurationMin, setRouteDurationMin] = useState<number | null>(null);
+  const [routeFarms, setRouteFarms] = useState<RouteFarmResult[]>([]);
+  const [routeIgnoredFarmCount, setRouteIgnoredFarmCount] = useState(0);
+  const [routeSearchInitialized, setRouteSearchInitialized] = useState(false);
+  const [routeSearchPerformed, setRouteSearchPerformed] = useState(false);
 
   useEffect(() => {
     let isCancelled = false;
@@ -732,6 +838,70 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem("nahversorgt-favorites", JSON.stringify(favorites));
   }, [favorites]);
+
+  useEffect(() => {
+    const savedRouteSearchRaw = window.localStorage.getItem(ROUTE_SEARCH_STORAGE_KEY);
+
+    if (!savedRouteSearchRaw) {
+      setRouteSearchInitialized(true);
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(savedRouteSearchRaw) as SavedRouteSearch;
+
+      if (parsed.start) {
+        setRouteStartLocation(parsed.start);
+        setRouteStartQuery(parsed.start.label);
+      }
+
+      if (parsed.target) {
+        setRouteTargetLocation(parsed.target);
+        setRouteTargetQuery(parsed.target.label);
+      }
+
+      if (Number.isFinite(parsed.corridorKm)) {
+        setRouteCorridorKm(parsed.corridorKm);
+      }
+
+      if (Array.isArray(parsed.selectedCategories)) {
+        setSelectedCategories(parsed.selectedCategories);
+      }
+
+      if (parsed.openingFilter) {
+        setRouteOpeningFilter(parsed.openingFilter);
+      }
+
+      setRouteMessage("Letzte Routen-Suche wurde übernommen.");
+    } catch {
+      window.localStorage.removeItem(ROUTE_SEARCH_STORAGE_KEY);
+    } finally {
+      setRouteSearchInitialized(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!routeSearchInitialized) {
+      return;
+    }
+
+    const valueToPersist: SavedRouteSearch = {
+      corridorKm: routeCorridorKm,
+      selectedCategories,
+      openingFilter: routeOpeningFilter,
+      start: routeStartLocation,
+      target: routeTargetLocation,
+    };
+
+    window.localStorage.setItem(ROUTE_SEARCH_STORAGE_KEY, JSON.stringify(valueToPersist));
+  }, [
+    routeSearchInitialized,
+    routeCorridorKm,
+    selectedCategories,
+    routeOpeningFilter,
+    routeStartLocation,
+    routeTargetLocation,
+  ]);
 
   const distanceInfoByFarmId = useMemo(() => {
     return Object.fromEntries(
@@ -826,14 +996,90 @@ function App() {
     });
   }, [filteredFarms]);
 
+  const routeFarmsFiltered = useMemo(() => {
+    const categoryFiltered = routeFarms.filter((farm) => {
+      if (selectedCategories.length === 0) {
+        return true;
+      }
+
+      return selectedCategories.some((category) => farm.categories.includes(category));
+    });
+
+    const openingFiltered = categoryFiltered.filter((farm) => {
+      if (routeOpeningFilter === "all") {
+        return true;
+      }
+
+      if (routeOpeningFilter === "open_now") {
+        return farm.openingState === "open";
+      }
+
+      return farm.selfService || /selbstbedienung/i.test(farm.openingHoursText ?? "");
+    });
+
+    return openingFiltered.sort((a, b) => {
+      if (a.openingState === "open" && b.openingState !== "open") {
+        return -1;
+      }
+
+      if (a.openingState !== "open" && b.openingState === "open") {
+        return 1;
+      }
+
+      return a.distanceToRouteKm - b.distanceToRouteKm;
+    });
+  }, [routeFarms, routeOpeningFilter, selectedCategories]);
+
   const mapCenter = userLocation ?? SOUTH_TYROL_CENTER;
   const selectedFarm = displayedFarms.find((farm) => farm.id === selectedFarmId) ?? null;
+  const routingConfiguration = getRoutingConfiguration();
+  const geocodingProviderConfiguration = getGeocodingProviderConfiguration();
 
   const refreshPublicFarms = async () => {
     const loadedFarms = await loadFarms();
 
     setFarms(mapFarmSourceEntriesToFarms(loadedFarms));
   };
+
+  const logServiceError = (scope: string, error: unknown) => {
+    if (!import.meta.env.DEV) {
+      return;
+    }
+
+    if (error && typeof error === "object") {
+      const typedError = error as {
+        code?: unknown;
+        message?: unknown;
+        details?: unknown;
+        hint?: unknown;
+      };
+
+      console.warn(scope, {
+        code: typedError.code,
+        message: typedError.message,
+        details: typedError.details,
+        hint: typedError.hint,
+      });
+      return;
+    }
+
+    console.warn(scope, error);
+  };
+
+  const routePolylinePositions = useMemo(
+    () => routeCoordinates.map((point) => [point.latitude, point.longitude] as [number, number]),
+    [routeCoordinates],
+  );
+
+  const routeMapCenter = useMemo(() => {
+    if (routeCoordinates.length === 0) {
+      return mapCenter;
+    }
+
+    const middleIndex = Math.floor(routeCoordinates.length / 2);
+
+    return routeCoordinates[middleIndex];
+  }, [mapCenter, routeCoordinates]);
 
   const toggleCategory = (categoryId: string) => {
     setSelectedCategories((current) =>
@@ -866,15 +1112,21 @@ function App() {
     return `${distance.toFixed(1).replace(".", ",")} km`;
   };
 
-  const MapViewController = () => {
+  const MapViewController = ({
+    center,
+    zoom,
+  }: {
+    center: GeoCoordinates;
+    zoom: number;
+  }) => {
     const map = useMap();
 
     useEffect(() => {
-      map.setView([mapCenter.latitude, mapCenter.longitude], mapZoom, {
+      map.setView([center.latitude, center.longitude], zoom, {
         animate: true,
         duration: 0.6,
       });
-    }, [map, mapCenter, mapZoom]);
+    }, [map, center, zoom]);
 
     return null;
   };
@@ -922,6 +1174,265 @@ function App() {
         maximumAge: 0,
       },
     );
+  };
+
+  const selectRouteLocation = (field: RouteField, location: GeocodingLocation) => {
+    setRouteError(null);
+
+    if (field === "start") {
+      setRouteStartLocation(location);
+      setRouteStartQuery(location.label);
+      setRouteStartSuggestions([]);
+      return;
+    }
+
+    setRouteTargetLocation(location);
+    setRouteTargetQuery(location.label);
+    setRouteTargetSuggestions([]);
+  };
+
+  const swapRouteLocations = () => {
+    setRouteStartLocation(routeTargetLocation);
+    setRouteTargetLocation(routeStartLocation);
+    setRouteStartQuery(routeTargetLocation?.label ?? "");
+    setRouteTargetQuery(routeStartLocation?.label ?? "");
+    setRouteStartSuggestions([]);
+    setRouteTargetSuggestions([]);
+  };
+
+  const getRouteQueryByField = (field: RouteField) =>
+    field === "start" ? routeStartQuery : routeTargetQuery;
+
+  const setRouteSuggestionsByField = (field: RouteField, suggestions: GeocodingLocation[]) => {
+    if (field === "start") {
+      setRouteStartSuggestions(suggestions);
+      return;
+    }
+
+    setRouteTargetSuggestions(suggestions);
+  };
+
+  const runRouteLocationSearch = async (field: RouteField) => {
+    const query = getRouteQueryByField(field).trim();
+
+    if (query.length < 2) {
+      return;
+    }
+
+    setRouteError(null);
+    setRouteMessage(null);
+    setRouteSuggestionsLoadingField(field);
+
+    try {
+      const suggestions = await searchGeocodingLocations(query);
+
+      setRouteSuggestionsByField(field, suggestions);
+
+      if (field === "start") {
+        setRouteStartLocation(null);
+      } else {
+        setRouteTargetLocation(null);
+      }
+
+      if (suggestions.length === 0) {
+        setRouteError("Ort konnte nicht gefunden werden.");
+      }
+    } catch (error) {
+      logServiceError("Ortsuche fehlgeschlagen", error);
+      setRouteSuggestionsByField(field, []);
+      setRouteError("Die Ortssuche ist gerade nicht erreichbar.");
+    } finally {
+      setRouteSuggestionsLoadingField(null);
+    }
+  };
+
+  const useCurrentLocationAsRouteStart = () => {
+    if (!navigator.geolocation) {
+      setRouteError("Standort ist auf diesem Gerät nicht verfügbar.");
+      return;
+    }
+
+    setRouteError(null);
+    setRouteMessage(null);
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const nextLocation = {
+          latitude: Number(position.coords.latitude),
+          longitude: Number(position.coords.longitude),
+        };
+
+        setUserLocation(nextLocation);
+        setLocationStatus("active");
+
+        try {
+          const reverseLocation = await reverseGeocodeLocation(
+            nextLocation.latitude,
+            nextLocation.longitude,
+          );
+
+          if (reverseLocation) {
+            setRouteStartLocation(reverseLocation);
+            setRouteStartQuery(reverseLocation.label);
+            return;
+          }
+        } catch (error) {
+          logServiceError("Reverse-Geocoding fehlgeschlagen", error);
+        }
+
+        const fallbackLocation: GeocodingLocation = {
+          id: `current-${nextLocation.latitude}-${nextLocation.longitude}`,
+          label: "Aktueller Standort",
+          latitude: nextLocation.latitude,
+          longitude: nextLocation.longitude,
+          address: null,
+        };
+
+        setRouteStartLocation(fallbackLocation);
+        setRouteStartQuery(fallbackLocation.label);
+      },
+      () => {
+        setRouteError("Standortfreigabe wurde verweigert oder ist gerade nicht verfügbar.");
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      },
+    );
+  };
+
+  const resolveRouteLocation = async (
+    query: string,
+    selectedLocation: GeocodingLocation | null,
+  ): Promise<GeocodingLocation | null> => {
+    if (selectedLocation && selectedLocation.label === query.trim()) {
+      return selectedLocation;
+    }
+
+    return geocodeSingleLocation(query);
+  };
+
+  const formatRouteOpenStatus = (farm: Farm) => {
+    if (farm.openingState === "unknown") {
+      return "Öffnungszeiten bitte beim Hof prüfen";
+    }
+
+    return farm.openingHoursStatus ?? "Öffnungszeiten bitte beim Hof prüfen";
+  };
+
+  const runRouteSearch = async () => {
+    setRouteError(null);
+    setRouteMessage(null);
+
+    if (!routingConfiguration.isConfigured) {
+      setRouteError("Routing ist noch nicht konfiguriert. Bitte VITE_ROUTING_API_URL setzen.");
+      return;
+    }
+
+    if (!routeStartQuery.trim() || !routeTargetQuery.trim()) {
+      setRouteError("Bitte Start und Ziel eingeben.");
+      return;
+    }
+
+    setRouteLoading(true);
+    setRouteSearchPerformed(true);
+
+    try {
+      const resolvedStart = await resolveRouteLocation(routeStartQuery, routeStartLocation);
+      const resolvedTarget = await resolveRouteLocation(routeTargetQuery, routeTargetLocation);
+
+      if (!resolvedStart || !resolvedTarget) {
+        setRouteError("Start oder Ziel konnte nicht gefunden werden.");
+        setRouteCoordinates([]);
+        setRouteFarms([]);
+        return;
+      }
+
+      setRouteStartLocation(resolvedStart);
+      setRouteTargetLocation(resolvedTarget);
+      setRouteStartQuery(resolvedStart.label);
+      setRouteTargetQuery(resolvedTarget.label);
+
+      const route = await getRouteBetweenPoints(
+        { latitude: resolvedStart.latitude, longitude: resolvedStart.longitude },
+        { latitude: resolvedTarget.latitude, longitude: resolvedTarget.longitude },
+      );
+
+      const farmsWithCoordinates = farms.filter((farm) => Boolean(farm.coordinates));
+      const missingCoordinatesCount = farms.length - farmsWithCoordinates.length;
+
+      const alongRoute = farmsWithCoordinates
+        .map((farm) => {
+          const point = farm.coordinates as RoutePoint;
+          const distanceToRouteKm = getDistanceToRouteKm(point, route.coordinates);
+
+          return {
+            ...farm,
+            distanceToRouteKm,
+          } satisfies RouteFarmResult;
+        })
+        .filter((farm) => farm.distanceToRouteKm <= routeCorridorKm);
+
+      setRouteCoordinates(route.coordinates);
+      setRouteDistanceKm(route.distanceKm);
+      setRouteDurationMin(route.durationMin);
+      setRouteFarms(alongRoute);
+      setRouteIgnoredFarmCount(missingCoordinatesCount);
+
+      if (alongRoute.length === 0) {
+        setRouteMessage("Keine Höfe entlang dieser Route gefunden.");
+      } else if (missingCoordinatesCount > 0) {
+        setRouteMessage("Einige Höfe konnten wegen fehlender Standortdaten nicht berücksichtigt werden.");
+      }
+    } catch (error) {
+      logServiceError("Routing fehlgeschlagen", error);
+
+      const message = error instanceof Error ? error.message : String(error);
+
+      if (message.includes("GEOCODING_SEARCH_FAILED") || message.includes("GEOCODING_REVERSE_FAILED")) {
+        setRouteError("Die Ortssuche ist gerade nicht erreichbar.");
+      } else if (message.includes("ROUTING_NOT_CONFIGURED")) {
+        setRouteError("Routing ist noch nicht konfiguriert. Bitte VITE_ROUTING_API_URL setzen.");
+      } else if (message.includes("ROUTING_NO_ROUTE")) {
+        setRouteError("Routing konnte gerade nicht geladen werden.");
+      } else {
+        setRouteError("Routing konnte gerade nicht geladen werden.");
+      }
+
+      setRouteCoordinates([]);
+      setRouteFarms([]);
+    } finally {
+      setRouteLoading(false);
+    }
+  };
+
+  const openNavigationToFarm = (farm: Farm) => {
+    if (!farm.coordinates) {
+      return;
+    }
+
+    const destination = `${farm.coordinates.latitude},${farm.coordinates.longitude}`;
+    const isAppleDevice = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const mapsUrl = isAppleDevice
+      ? `https://maps.apple.com/?daddr=${destination}&q=${encodeURIComponent(farm.name)}`
+      : `https://www.google.com/maps/dir/?api=1&destination=${destination}`;
+
+    window.open(mapsUrl, "_blank", "noopener,noreferrer");
+  };
+
+  const openFarmAsStopover = (farm: Farm) => {
+    if (!farm.coordinates) {
+      return;
+    }
+
+    const destination = `${farm.coordinates.latitude},${farm.coordinates.longitude}`;
+    const isAppleDevice = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const mapsUrl = isAppleDevice
+      ? `https://maps.apple.com/?q=${encodeURIComponent(farm.name)}&ll=${destination}`
+      : `https://www.google.com/maps/search/?api=1&query=${destination}`;
+
+    window.open(mapsUrl, "_blank", "noopener,noreferrer");
   };
 
   const showFarmDetail = (farmId: string) => {
@@ -1196,88 +1707,446 @@ function App() {
             <div className="section-heading">
               <div>
                 <span className="eyebrow">Entdecken</span>
-                <h2>Alle Höfe</h2>
+                <h2>{discoverMode === "nearby" ? "Alle Höfe" : "Auf meinem Weg"}</h2>
               </div>
             </div>
 
-            <div className="farm-list">
-              {discoveredFarms.map((farm) => {
-                const isFavorite = favorites.includes(farm.id);
-                return (
-                  <article className="farm-card" key={farm.id} id={`farm-${farm.id}`}>
-                    <img src={farm.image} alt={farm.name} />
-                    <div className="farm-card-content">
-                      <div className="farm-card-header">
-                        <div>
-                          <h3>{farm.name}</h3>
-                          <p>
-                            {farm.location} ·{" "}
-                            {getDistanceLabel(
-                              farm.distance,
-                              distanceInfoByFarmId[farm.id]?.reason ?? null,
-                            )}
-                          </p>
-                        </div>
-                        <button
-                          className={
-                            isFavorite
-                              ? "favorite-button active"
-                              : "favorite-button"
-                          }
-                          onClick={() => toggleFavorite(farm.id)}
-                          aria-label="Favorit speichern"
-                        >
-                          {isFavorite ? "♥" : "♡"}
-                        </button>
-                      </div>
-                      <p className="products">{farm.products.join(" · ")}</p>
-                      <div className="farm-actions">
-                        <button
-                          className="secondary-button"
-                          onClick={() => showFarmDetail(farm.id)}
-                        >
-                          Hof ansehen
-                        </button>
-                        {normalizePhoneNumber(farm.phone) && (
-                          <a
-                            className="primary-button action-button"
-                            href={`tel:${normalizePhoneNumber(farm.phone)}`}
-                          >
-                            Anrufen
-                          </a>
-                        )}
-                        {getWhatsAppTarget(farm) && (
+            <div className="discover-mode-toggle" role="tablist" aria-label="Entdecken Modus">
+              <button
+                className={discoverMode === "nearby" ? "chip active" : "chip"}
+                onClick={() => setDiscoverMode("nearby")}
+                role="tab"
+                aria-selected={discoverMode === "nearby"}
+              >
+                In meiner Nähe
+              </button>
+              <button
+                className={discoverMode === "route" ? "chip active" : "chip"}
+                onClick={() => setDiscoverMode("route")}
+                role="tab"
+                aria-selected={discoverMode === "route"}
+              >
+                Auf meinem Weg
+              </button>
+            </div>
+
+            {discoverMode === "nearby" ? (
+              <div className="farm-list">
+                {discoveredFarms.map((farm) => {
+                  const isFavorite = favorites.includes(farm.id);
+                  return (
+                    <article className="farm-card" key={farm.id} id={`farm-${farm.id}`}>
+                      <img src={farm.image} alt={farm.name} />
+                      <div className="farm-card-content">
+                        <div className="farm-card-header">
+                          <div>
+                            <h3>{farm.name}</h3>
+                            <p>
+                              {farm.location} ·{" "}
+                              {getDistanceLabel(
+                                farm.distance,
+                                distanceInfoByFarmId[farm.id]?.reason ?? null,
+                              )}
+                            </p>
+                          </div>
                           <button
-                            className="primary-button"
-                            onClick={() => openWhatsApp(farm)}
+                            className={
+                              isFavorite
+                                ? "favorite-button active"
+                                : "favorite-button"
+                            }
+                            onClick={() => toggleFavorite(farm.id)}
+                            aria-label="Favorit speichern"
                           >
-                            Per WhatsApp kontaktieren
+                            {isFavorite ? "♥" : "♡"}
                           </button>
-                        )}
-                        {normalizeWebsiteUrl(farm.website) && (
-                          <a
-                            className="secondary-button action-button"
-                            href={normalizeWebsiteUrl(farm.website) ?? undefined}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            Webseite besuchen
-                          </a>
-                        )}
-                        {farm.coordinates && (
+                        </div>
+                        <p className="products">{farm.products.join(" · ")}</p>
+                        <div className="farm-actions">
                           <button
                             className="secondary-button"
-                            onClick={() => openRouteToFarm(farm)}
+                            onClick={() => showFarmDetail(farm.id)}
                           >
-                            Route zum Hof
+                            Hof ansehen
                           </button>
-                        )}
+                          {normalizePhoneNumber(farm.phone) && (
+                            <a
+                              className="primary-button action-button"
+                              href={`tel:${normalizePhoneNumber(farm.phone)}`}
+                            >
+                              Anrufen
+                            </a>
+                          )}
+                          {getWhatsAppTarget(farm) && (
+                            <button
+                              className="primary-button"
+                              onClick={() => openWhatsApp(farm)}
+                            >
+                              Per WhatsApp kontaktieren
+                            </button>
+                          )}
+                          {normalizeWebsiteUrl(farm.website) && (
+                            <a
+                              className="secondary-button action-button"
+                              href={normalizeWebsiteUrl(farm.website) ?? undefined}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Webseite besuchen
+                            </a>
+                          )}
+                          {farm.coordinates && (
+                            <button
+                              className="secondary-button"
+                              onClick={() => openRouteToFarm(farm)}
+                            >
+                              Route zum Hof
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="route-mode-shell">
+                <div className="detail-card route-intro-card">
+                  <h3>Auf meinem Weg</h3>
+                  <p>Entdecke Hofläden entlang deiner Route und plane einen regionalen Zwischenstopp.</p>
+                  {geocodingProviderConfiguration.usesPublicNominatim && (
+                    <p className="route-attribution">
+                      Geocoding ©{" "}
+                      <a
+                        href="https://www.openstreetmap.org/copyright"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        OpenStreetMap-Mitwirkende
+                      </a>
+                    </p>
+                  )}
+                </div>
+
+                {!routingConfiguration.isConfigured && (
+                  <div className="empty-state">
+                    Routing ist noch nicht konfiguriert. Bitte VITE_ROUTING_API_URL setzen.
+                  </div>
+                )}
+
+                <div className="form-card route-search-card">
+                  <div className="auth-grid">
+                    <label className="field field-wide route-field">
+                      <span>Start</span>
+                      <div className="route-field-input-row">
+                        <input
+                          type="text"
+                          value={routeStartQuery}
+                          onChange={(event) => {
+                            setRouteStartQuery(event.target.value);
+                            setRouteStartLocation(null);
+                            setRouteStartSuggestions([]);
+                          }}
+                          placeholder="Startort oder Adresse"
+                        />
+                        <button
+                          type="button"
+                          className="secondary-button route-search-trigger"
+                          onClick={() => runRouteLocationSearch("start")}
+                          disabled={routeStartQuery.trim().length < 2 || routeSuggestionsLoadingField !== null}
+                        >
+                          {routeSuggestionsLoadingField === "start" ? "Suche läuft …" : "Ort suchen"}
+                        </button>
+                      </div>
+
+                      {routeStartLocation && (
+                        <p className="route-selected-location">Ausgewählt: {routeStartLocation.label}</p>
+                      )}
+
+                      {routeStartSuggestions.length > 0 && (
+                        <div className="route-suggestion-list">
+                          {routeStartSuggestions.map((suggestion) => (
+                            <button
+                              key={suggestion.id}
+                              className="route-suggestion-item"
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                                selectRouteLocation("start", suggestion);
+                              }}
+                            >
+                              {suggestion.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </label>
+
+                    <label className="field field-wide route-field">
+                      <span>Ziel</span>
+                      <div className="route-field-input-row">
+                        <input
+                          type="text"
+                          value={routeTargetQuery}
+                          onChange={(event) => {
+                            setRouteTargetQuery(event.target.value);
+                            setRouteTargetLocation(null);
+                            setRouteTargetSuggestions([]);
+                          }}
+                          placeholder="Zielort oder Adresse"
+                        />
+                        <button
+                          type="button"
+                          className="secondary-button route-search-trigger"
+                          onClick={() => runRouteLocationSearch("target")}
+                          disabled={routeTargetQuery.trim().length < 2 || routeSuggestionsLoadingField !== null}
+                        >
+                          {routeSuggestionsLoadingField === "target" ? "Suche läuft …" : "Ort suchen"}
+                        </button>
+                      </div>
+
+                      {routeTargetLocation && (
+                        <p className="route-selected-location">Ausgewählt: {routeTargetLocation.label}</p>
+                      )}
+
+                      {routeTargetSuggestions.length > 0 && (
+                        <div className="route-suggestion-list">
+                          {routeTargetSuggestions.map((suggestion) => (
+                            <button
+                              key={suggestion.id}
+                              className="route-suggestion-item"
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                                selectRouteLocation("target", suggestion);
+                              }}
+                            >
+                              {suggestion.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </label>
+                  </div>
+
+                  <div className="action-row">
+                    <button className="secondary-button" onClick={useCurrentLocationAsRouteStart}>
+                      Aktuellen Standort als Start verwenden
+                    </button>
+                    <button className="secondary-button" onClick={swapRouteLocations}>
+                      Start und Ziel vertauschen
+                    </button>
+                  </div>
+
+                  <div className="subsection">
+                    <div className="section-heading compact-heading">
+                      <div>
+                        <span className="eyebrow">Routenkorridor</span>
+                        <h3>{routeCorridorKm} km</h3>
                       </div>
                     </div>
-                  </article>
-                );
-              })}
-            </div>
+
+                    <div className="category-list">
+                      {ROUTE_CORRIDOR_OPTIONS_KM.map((corridor) => (
+                        <button
+                          key={corridor}
+                          className={routeCorridorKm === corridor ? "category active" : "category"}
+                          onClick={() => setRouteCorridorKm(corridor)}
+                        >
+                          {corridor} km
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="action-row">
+                    <button
+                      className="primary-button"
+                      onClick={runRouteSearch}
+                      disabled={routeLoading || routeSuggestionsLoadingField !== null}
+                    >
+                      {routeLoading ? "Route wird berechnet …" : "Route suchen"}
+                    </button>
+                  </div>
+
+                  {routeError && <p className="form-error">{routeError}</p>}
+                  {routeMessage && <p className="form-success">{routeMessage}</p>}
+                  {routeIgnoredFarmCount > 0 && (
+                    <p className="location-note">Einige Höfe haben noch keine genauen Standortdaten.</p>
+                  )}
+                </div>
+
+                <div className="form-card">
+                  <div className="section-heading compact-heading">
+                    <div>
+                      <span className="eyebrow">Filter</span>
+                      <h3>Öffnung und Produkte</h3>
+                    </div>
+                  </div>
+
+                  <div className="admin-filter-row">
+                    <button
+                      className={routeOpeningFilter === "all" ? "chip active" : "chip"}
+                      onClick={() => setRouteOpeningFilter("all")}
+                    >
+                      Alle Höfe
+                    </button>
+                    <button
+                      className={routeOpeningFilter === "open_now" ? "chip active" : "chip"}
+                      onClick={() => setRouteOpeningFilter("open_now")}
+                    >
+                      Jetzt geöffnet
+                    </button>
+                    <button
+                      className={routeOpeningFilter === "self_service" ? "chip active" : "chip"}
+                      onClick={() => setRouteOpeningFilter("self_service")}
+                    >
+                      Selbstbedienung
+                    </button>
+                  </div>
+
+                  <div className="category-list">
+                    {categories.map((category) => {
+                      const selected = selectedCategories.includes(category.id);
+
+                      return (
+                        <button
+                          key={category.id}
+                          className={selected ? "category active" : "category"}
+                          onClick={() => toggleCategory(category.id)}
+                        >
+                          <span>{category.icon}</span>
+                          {category.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {routeCoordinates.length > 1 && (
+                  <div className="map-view">
+                    <div className="map-shell">
+                      <MapContainer
+                        className="leaflet-map"
+                        center={[routeMapCenter.latitude, routeMapCenter.longitude]}
+                        zoom={10}
+                        scrollWheelZoom={false}
+                      >
+                        <MapViewController center={mapCenter} zoom={mapZoom} />
+                        <TileLayer
+                          attribution="&copy; OpenStreetMap contributors"
+                          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                        />
+
+                        <Polyline positions={routePolylinePositions} pathOptions={{ color: "#355f35", weight: 5 }} />
+
+                        {routeStartLocation && (
+                          <Marker
+                            position={[routeStartLocation.latitude, routeStartLocation.longitude]}
+                            icon={routeStartMarkerIcon}
+                          >
+                            <Popup>Start: {routeStartLocation.label}</Popup>
+                          </Marker>
+                        )}
+
+                        {routeTargetLocation && (
+                          <Marker
+                            position={[routeTargetLocation.latitude, routeTargetLocation.longitude]}
+                            icon={routeEndMarkerIcon}
+                          >
+                            <Popup>Ziel: {routeTargetLocation.label}</Popup>
+                          </Marker>
+                        )}
+
+                        {routeFarmsFiltered.map((farm) => (
+                          <Marker
+                            key={`route-farm-${farm.id}`}
+                            position={[farm.coordinates!.latitude, farm.coordinates!.longitude]}
+                            icon={
+                              farm.openingState === "open"
+                                ? routeFarmOpenMarkerIcon
+                                : farm.openingState === "closed"
+                                  ? routeFarmClosedMarkerIcon
+                                  : routeFarmUnknownMarkerIcon
+                            }
+                          >
+                            <Popup>
+                              <div className="map-popup">
+                                <strong>{farm.name}</strong>
+                                <p>{farm.location}</p>
+                                <p>{formatRouteOpenStatus(farm)}</p>
+                                <p>{farm.distanceToRouteKm.toFixed(1).replace(".", ",")} km von der Route</p>
+                                <button className="primary-button popup-button" onClick={() => showFarmDetail(farm.id)}>
+                                  Hof ansehen
+                                </button>
+                              </div>
+                            </Popup>
+                          </Marker>
+                        ))}
+                      </MapContainer>
+                    </div>
+                  </div>
+                )}
+
+                {routeCoordinates.length > 1 && (
+                  <div className="detail-card route-summary-card">
+                    <strong>Route</strong>
+                    <p>
+                      {routeDistanceKm?.toFixed(1).replace(".", ",") ?? "0,0"} km · ca. {Math.round(routeDurationMin ?? 0)} Min.
+                    </p>
+                  </div>
+                )}
+
+                {routeSearchPerformed && routeFarmsFiltered.length === 0 ? (
+                  <div className="empty-state">Keine Höfe entlang dieser Route gefunden.</div>
+                ) : (
+                  <div className="farm-list route-result-list">
+                    {routeFarmsFiltered.map((farm) => (
+                      <article className="farm-card" key={`route-result-${farm.id}`}>
+                        <img src={farm.image} alt={farm.name} />
+                        <div className="farm-card-content">
+                          <div className="farm-card-header">
+                            <div>
+                              <h3>{farm.name}</h3>
+                              <p>{farm.location}</p>
+                            </div>
+                          </div>
+
+                          <p className="products">{farm.products.join(" · ")}</p>
+
+                          <div className="badges">
+                            <span
+                              className={
+                                farm.openingState === "open"
+                                  ? "badge open"
+                                  : farm.openingState === "closed"
+                                    ? "badge closed"
+                                    : "badge unknown"
+                              }
+                            >
+                              {formatRouteOpenStatus(farm)}
+                            </span>
+                            <span className="badge delivery">
+                              {farm.distanceToRouteKm.toFixed(1).replace(".", ",")} km von der Route
+                            </span>
+                          </div>
+
+                          <div className="farm-actions">
+                            <button className="secondary-button" onClick={() => showFarmDetail(farm.id)}>
+                              Hof ansehen
+                            </button>
+                            <button className="primary-button" onClick={() => openNavigationToFarm(farm)}>
+                              Navigation starten
+                            </button>
+                            <button className="secondary-button" onClick={() => openFarmAsStopover(farm)}>
+                              Als Zwischenstopp öffnen
+                            </button>
+                          </div>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </section>
         )}
 
@@ -1415,7 +2284,7 @@ function App() {
                       zoom={mapZoom}
                       scrollWheelZoom={false}
                     >
-                      <MapViewController />
+                      <MapViewController center={routeMapCenter} zoom={10} />
 
                       <TileLayer
                         attribution="&copy; OpenStreetMap contributors"
