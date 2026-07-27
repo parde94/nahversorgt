@@ -1413,8 +1413,6 @@ function App() {
 
       if (alongRoute.length === 0) {
         setRouteMessage("Keine Höfe entlang dieser Route gefunden.");
-      } else if (missingCoordinatesCount > 0) {
-        setRouteMessage("Einige Höfe konnten wegen fehlender Standortdaten nicht berücksichtigt werden.");
       }
     } catch (error) {
       logServiceError("Routing fehlgeschlagen", error);
