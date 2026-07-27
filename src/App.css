@@ -39,7 +39,7 @@ button {
   width: min(100%, 1120px);
   margin: 0 auto;
   min-height: 100vh;
-  padding-bottom: 150px;
+  padding-bottom: calc(170px + env(safe-area-inset-bottom));
 }
 
 .topbar {
@@ -452,6 +452,10 @@ h1 {
   border-color: rgba(53, 95, 53, 0.16);
 }
 
+.route-result-list {
+  padding-bottom: 20px;
+}
+
 .auth-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -758,6 +762,13 @@ h1 {
   background: rgba(255, 255, 255, 0.75);
 }
 
+.route-inline-status {
+  margin: 0;
+  color: #355f35;
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .popup-button {
   margin-top: 8px;
 }
@@ -817,8 +828,10 @@ h1 {
   flex: 0 0 auto;
   align-items: center;
   gap: 8px;
+  min-height: 44px;
   padding: 12px 17px;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .farm-list {
@@ -840,6 +853,7 @@ h1 {
   width: 100%;
   height: 100%;
   min-height: 230px;
+  aspect-ratio: 16 / 9;
   object-fit: cover;
 }
 
@@ -850,7 +864,8 @@ h1 {
 
 .detail-hero-image {
   width: 100%;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 16 / 9;
+  max-height: 220px;
   object-fit: cover;
   border-radius: 22px;
 }
@@ -1127,8 +1142,13 @@ h1 {
   }
 
   .leaflet-map {
-    min-height: 65vh;
-    height: 65vh;
+    min-height: 300px;
+    height: clamp(300px, 52vh, 380px);
+  }
+
+  .route-mode-shell .leaflet-map {
+    min-height: 300px;
+    height: clamp(300px, 50vh, 360px);
   }
 
   .content-section {
@@ -1171,6 +1191,7 @@ h1 {
 
   .farm-card > img {
     min-height: 100%;
+    aspect-ratio: 16 / 9;
   }
 
   .farm-card-content {
@@ -1190,6 +1211,50 @@ h1 {
   .detail-actions,
   .map-popup-actions {
     flex-direction: column;
+  }
+
+  .route-result-list .farm-card {
+    grid-template-columns: 1fr;
+  }
+
+  .route-result-list .farm-card > img {
+    height: min(52vw, 220px);
+    min-height: 180px;
+    max-height: 220px;
+  }
+
+  .route-result-list .farm-card-content {
+    padding: 14px;
+  }
+
+  .route-result-list .products {
+    margin: 10px 0;
+    line-height: 1.35;
+  }
+
+  .route-result-list .farm-actions {
+    margin-top: 12px;
+  }
+
+  .route-mode-shell .category-list,
+  .route-mode-shell .admin-filter-row {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 2px;
+  }
+
+  .route-mode-shell .admin-filter-row {
+    flex-wrap: nowrap;
+  }
+
+  .route-mode-shell .admin-filter-row .chip {
+    flex: 0 0 auto;
+  }
+
+  .route-summary-card p {
+    font-size: 14px;
+    line-height: 1.4;
   }
 
   .farm-image-grid {
@@ -1242,9 +1307,13 @@ h1 {
 
   .farm-card > img {
     height: 190px;
+    min-height: 190px;
+    max-height: 220px;
+    aspect-ratio: 16 / 9;
   }
 
   .detail-hero-image {
-    aspect-ratio: 1.2;
+    aspect-ratio: 16 / 9;
+    max-height: 220px;
   }
 }

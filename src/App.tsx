@@ -716,6 +716,29 @@ const fallbackFarms = mapFarmSourceEntriesToFarms(fallbackFarmEntries);
 const ROUTE_SEARCH_STORAGE_KEY = "nahversorgt-route-search-v1";
 const ROUTE_CORRIDOR_OPTIONS_KM = [5, 10, 15, 20, 30, 40, 50] as const;
 
+const FarmImage = ({
+  src,
+  alt,
+  className,
+}: {
+  src?: string | null;
+  alt: string;
+  className?: string;
+}) => {
+  const [useFallbackImage, setUseFallbackImage] = useState(false);
+  const normalizedSource = src?.trim() ?? "";
+  const imageSource = useFallbackImage || !normalizedSource ? heroImage : normalizedSource;
+
+  return (
+    <img
+      className={className}
+      src={imageSource}
+      alt={alt}
+      onError={() => setUseFallbackImage(true)}
+    />
+  );
+};
+
 function App() {
   const [farms, setFarms] = useState<Farm[]>(fallbackFarms);
   const [search, setSearch] = useState("");
@@ -1321,6 +1344,14 @@ function App() {
     return farm.openingHoursStatus ?? "Öffnungszeiten bitte beim Hof prüfen";
   };
 
+  const formatRouteDistanceLabel = (distanceToRouteKm: number) => {
+    if (distanceToRouteKm < 0.1) {
+      return "Direkt an der Route";
+    }
+
+    return `${distanceToRouteKm.toFixed(1).replace(".", ",")} km von der Route`;
+  };
+
   const runRouteSearch = async () => {
     setRouteError(null);
     setRouteMessage(null);
@@ -1497,7 +1528,11 @@ function App() {
             </button>
 
             <div className="detail-card">
-              <img className="detail-hero-image" src={selectedFarm.image} alt={selectedFarm.name} />
+              <FarmImage
+                className="detail-hero-image"
+                src={selectedFarm.image}
+                alt={selectedFarm.name}
+              />
               <h2>{selectedFarm.name}</h2>
               <p>{selectedFarm.location}</p>
               <p>
@@ -1630,7 +1665,7 @@ function App() {
               <div className="farm-list">
                 {favoriteFarms.map((farm) => (
                   <article className="farm-card" key={farm.id} id={`farm-${farm.id}`}>
-                    <img src={farm.image} alt={farm.name} />
+                    <FarmImage src={farm.image} alt={farm.name} />
                     <div className="farm-card-content">
                       <div className="farm-card-header">
                         <div>
@@ -1736,7 +1771,7 @@ function App() {
                   const isFavorite = favorites.includes(farm.id);
                   return (
                     <article className="farm-card" key={farm.id} id={`farm-${farm.id}`}>
-                      <img src={farm.image} alt={farm.name} />
+                      <FarmImage src={farm.image} alt={farm.name} />
                       <div className="farm-card-content">
                         <div className="farm-card-header">
                           <div>
@@ -1967,10 +2002,14 @@ function App() {
                     </button>
                   </div>
 
+                  {routeLoading && <p className="route-inline-status">Route wird berechnet …</p>}
+
                   {routeError && <p className="form-error">{routeError}</p>}
                   {routeMessage && <p className="form-success">{routeMessage}</p>}
                   {routeIgnoredFarmCount > 0 && (
-                    <p className="location-note">Einige Höfe haben noch keine genauen Standortdaten.</p>
+                    <p className="location-note">
+                      {routeIgnoredFarmCount} Höfe konnten wegen fehlender Standortdaten nicht berücksichtigt werden.
+                    </p>
                   )}
                 </div>
 
@@ -2073,7 +2112,7 @@ function App() {
                                 <strong>{farm.name}</strong>
                                 <p>{farm.location}</p>
                                 <p>{formatRouteOpenStatus(farm)}</p>
-                                <p>{farm.distanceToRouteKm.toFixed(1).replace(".", ",")} km von der Route</p>
+                                <p>{formatRouteDistanceLabel(farm.distanceToRouteKm)}</p>
                                 <button className="primary-button popup-button" onClick={() => showFarmDetail(farm.id)}>
                                   Hof ansehen
                                 </button>
@@ -2088,20 +2127,20 @@ function App() {
 
                 {routeCoordinates.length > 1 && (
                   <div className="detail-card route-summary-card">
-                    <strong>Route</strong>
                     <p>
-                      {routeDistanceKm?.toFixed(1).replace(".", ",") ?? "0,0"} km · ca. {Math.round(routeDurationMin ?? 0)} Min.
+                      {routeFarmsFiltered.length} Höfe entlang deiner Route ·{" "}
+                      {routeDistanceKm?.toFixed(1).replace(".", ",") ?? "0,0"} km · ca. {Math.round(routeDurationMin ?? 0)} Min. · Korridor {routeCorridorKm} km
                     </p>
                   </div>
                 )}
 
                 {routeSearchPerformed && routeFarmsFiltered.length === 0 ? (
-                  <div className="empty-state">Keine Höfe entlang dieser Route gefunden.</div>
+                  <div className="empty-state">Keine Höfe entlang dieser Route gefunden. Prüfe Korridor oder Filter.</div>
                 ) : (
                   <div className="farm-list route-result-list">
                     {routeFarmsFiltered.map((farm) => (
                       <article className="farm-card" key={`route-result-${farm.id}`}>
-                        <img src={farm.image} alt={farm.name} />
+                        <FarmImage src={farm.image} alt={farm.name} />
                         <div className="farm-card-content">
                           <div className="farm-card-header">
                             <div>
@@ -2125,7 +2164,7 @@ function App() {
                               {formatRouteOpenStatus(farm)}
                             </span>
                             <span className="badge delivery">
-                              {farm.distanceToRouteKm.toFixed(1).replace(".", ",")} km von der Route
+                              {formatRouteDistanceLabel(farm.distanceToRouteKm)}
                             </span>
                           </div>
 
@@ -2284,7 +2323,7 @@ function App() {
                       zoom={mapZoom}
                       scrollWheelZoom={false}
                     >
-                      <MapViewController center={routeMapCenter} zoom={10} />
+                      <MapViewController center={mapCenter} zoom={mapZoom} />
 
                       <TileLayer
                         attribution="&copy; OpenStreetMap contributors"
@@ -2394,7 +2433,7 @@ function App() {
                         key={farm.id}
                         id={`farm-${farm.id}`}
                       >
-                        <img src={farm.image} alt={farm.name} />
+                        <FarmImage src={farm.image} alt={farm.name} />
                         <div className="farm-card-content">
                           <div className="farm-card-header">
                             <div>
