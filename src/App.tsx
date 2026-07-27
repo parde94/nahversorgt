@@ -41,6 +41,7 @@ type FarmSourceEntry = {
   lat?: number | string | null;
   lng?: number | string | null;
   coordinates?: unknown;
+  image?: string | null;
 };
 
 type Farm = {
@@ -622,7 +623,7 @@ const mapFarmSourceEntriesToFarms = (entries: FarmSourceEntry[]): Farm[] => {
       openingHoursStatus: openingHoursInfo.statusText,
       openingHoursNote: openingHoursInfo.specialNote ?? undefined,
       openingHoursOverview: openingHoursInfo.weeklyOverview,
-      image: heroImage,
+      image: farm.image ?? heroImage,
       coordinates: extractFarmCoordinates(farm),
     };
   });
@@ -828,6 +829,12 @@ function App() {
   const mapCenter = userLocation ?? SOUTH_TYROL_CENTER;
   const selectedFarm = displayedFarms.find((farm) => farm.id === selectedFarmId) ?? null;
 
+  const refreshPublicFarms = async () => {
+    const loadedFarms = await loadFarms();
+
+    setFarms(mapFarmSourceEntriesToFarms(loadedFarms));
+  };
+
   const toggleCategory = (categoryId: string) => {
     setSelectedCategories((current) =>
       current.includes(categoryId)
@@ -979,6 +986,7 @@ function App() {
             </button>
 
             <div className="detail-card">
+              <img className="detail-hero-image" src={selectedFarm.image} alt={selectedFarm.name} />
               <h2>{selectedFarm.name}</h2>
               <p>{selectedFarm.location}</p>
               <p>
@@ -1092,7 +1100,7 @@ function App() {
               </div>
             </div>
 
-            <FarmerArea />
+            <FarmerArea onPublicFarmsChanged={refreshPublicFarms} />
           </section>
         )}
 

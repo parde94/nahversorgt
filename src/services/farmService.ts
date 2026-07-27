@@ -20,6 +20,7 @@ type FarmSourceEntry = {
   latitude?: number | string | null;
   longitude?: number | string | null;
   coordinates?: unknown;
+  image?: string | null;
 };
 
 type FarmDataFile = {
@@ -42,6 +43,14 @@ type DbFarmRow = {
   latitude: number | null;
   longitude: number | null;
   description: string | null;
+};
+
+type DbFarmImageRow = {
+  farm_id: string;
+  storage_path: string;
+  is_primary: boolean;
+  sort_order: number;
+  created_at: string;
 };
 
 type DbProductRow = {
@@ -74,6 +83,16 @@ const devLogSource = (source: "Supabase" | "JSON-Fallback") => {
   if (import.meta.env.DEV) {
     console.info(`Datenquelle: ${source}`);
   }
+};
+
+const resolveFarmImageUrl = (storagePath: string) => {
+  if (!supabase) {
+    return null;
+  }
+
+  const { data } = supabase.storage.from("farm-images").getPublicUrl(storagePath);
+
+  return data.publicUrl || null;
 };
 
 const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number) => {
@@ -215,10 +234,11 @@ const fetchSupabaseFarms = async (): Promise<FarmSourceEntry[]> => {
       .order("sort_order", { ascending: true }),
     supabase
       .from("farm_images")
-      .select("farm_id, storage_path, is_primary, sort_order")
+      .select("farm_id, storage_path, is_primary, sort_order, created_at")
       .in("farm_id", farmIds)
       .order("is_primary", { ascending: false })
-      .order("sort_order", { ascending: true }),
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true }),
   ]);
 
   if (productsResult.error) {
@@ -235,9 +255,11 @@ const fetchSupabaseFarms = async (): Promise<FarmSourceEntry[]> => {
 
   const products = (productsResult.data ?? []) as DbProductRow[];
   const openingHours = (openingHoursResult.data ?? []) as DbOpeningHoursRow[];
+  const farmImages = (farmImagesResult.data ?? []) as DbFarmImageRow[];
 
   const productsByFarm = new Map<string, DbProductRow[]>();
   const openingByFarm = new Map<string, DbOpeningHoursRow[]>();
+  const imageByFarm = new Map<string, DbFarmImageRow[]>();
 
   for (const product of products) {
     const current = productsByFarm.get(product.farm_id) ?? [];
@@ -251,9 +273,16 @@ const fetchSupabaseFarms = async (): Promise<FarmSourceEntry[]> => {
     openingByFarm.set(openingHour.farm_id, current);
   }
 
+  for (const image of farmImages) {
+    const current = imageByFarm.get(image.farm_id) ?? [];
+    current.push(image);
+    imageByFarm.set(image.farm_id, current);
+  }
+
   return farmRows.map((farm) => {
     const farmProducts = productsByFarm.get(farm.id) ?? [];
     const farmOpeningHours = openingByFarm.get(farm.id) ?? [];
+    const farmImage = imageByFarm.get(farm.id)?.[0] ?? null;
 
     const categories = Array.from(
       new Set(
@@ -288,6 +317,7 @@ const fetchSupabaseFarms = async (): Promise<FarmSourceEntry[]> => {
       latitude: farm.latitude,
       longitude: farm.longitude,
       coordinates: null,
+      image: farmImage ? resolveFarmImageUrl(farmImage.storage_path) : null,
     };
   });
 };

@@ -30,13 +30,19 @@ import {
 import {
   createOpeningHour,
   createProduct,
+  deleteFarmImage,
   deleteOpeningHour,
   deleteProduct,
   getFarmerDashboardData,
+  setFarmImageAsPrimary,
   updateFarmBasics,
+  updateFarmImageDescription,
+  updateFarmImageOrder,
   updateOpeningHour,
   updateProduct,
+  uploadFarmImage,
   type FarmerDashboardData,
+  type FarmerFarmImageRecord,
   type FarmerOpeningHourRecord,
   type FarmerProductRecord,
   type FarmOwnerFarmRecord,
@@ -112,6 +118,11 @@ type OpeningHourDraft = {
   sortOrder: string;
 };
 
+type ImageUploadDraft = {
+  caption: string;
+  file: File | null;
+};
+
 const CLAIM_FARM_RESULTS_LIMIT = 15;
 
 const emptyClaimForm = (): ClaimFarmForm => ({
@@ -155,6 +166,11 @@ const emptyOpeningHourDraft = (): OpeningHourDraft => ({
   closesAt: "12:00",
   note: "",
   sortOrder: "0",
+});
+
+const emptyImageUploadDraft = (): ImageUploadDraft => ({
+  caption: "",
+  file: null,
 });
 
 type LoadState = "idle" | "loading" | "ready";
@@ -419,7 +435,31 @@ const updateOpeningHourDraft = (
   };
 };
 
-export function FarmerArea() {
+const updateFarmImageDraft = (
+  dashboard: FarmerDashboardData | null,
+  imageId: string,
+  patch: Partial<FarmerFarmImageRecord>,
+): FarmerDashboardData | null => {
+  if (!dashboard) {
+    return dashboard;
+  }
+
+  return {
+    ...dashboard,
+    imagesByFarmId: Object.fromEntries(
+      Object.entries(dashboard.imagesByFarmId).map(([farmId, images]) => [
+        farmId,
+        images.map((image) => (image.id === imageId ? { ...image, ...patch } : image)),
+      ]),
+    ),
+  };
+};
+
+type FarmerAreaProps = {
+  onPublicFarmsChanged?: () => void | Promise<void>;
+};
+
+export function FarmerArea({ onPublicFarmsChanged }: FarmerAreaProps) {
   const [session, setSession] = useState<SessionState>({ user: null });
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [profileLoadState, setProfileLoadState] = useState<LoadState>("idle");
@@ -466,8 +506,10 @@ export function FarmerArea() {
   const [farmSaveState, setFarmSaveState] = useState<Record<string, boolean>>({});
   const [productSaveState, setProductSaveState] = useState<Record<string, boolean>>({});
   const [openingSaveState, setOpeningSaveState] = useState<Record<string, boolean>>({});
+  const [imageSaveState, setImageSaveState] = useState<Record<string, boolean>>({});
   const [newProductForms, setNewProductForms] = useState<Record<string, ProductDraft>>({});
   const [newOpeningForms, setNewOpeningForms] = useState<Record<string, OpeningHourDraft>>({});
+  const [newImageForms, setNewImageForms] = useState<Record<string, ImageUploadDraft>>({});
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -576,6 +618,8 @@ export function FarmerArea() {
       setAdminMessage(null);
       setAdminAction(null);
       setAdminActionLoadingId(null);
+      setImageSaveState({});
+      setNewImageForms({});
       setRecentAdminExpanded(false);
       setSelectedManagedFarmId(null);
       setAdminViewTab("admin");
@@ -871,6 +915,11 @@ export function FarmerArea() {
   const refreshDashboard = async (profileId: string) => {
     const dashboardData = await getFarmerDashboardData(profileId);
     setDashboard(dashboardData);
+  };
+
+  const refreshFarmViews = async () => {
+    await refreshDashboard(session.user!.id);
+    await onPublicFarmsChanged?.();
   };
 
   const refreshAdminRequests = async () => {
@@ -1396,6 +1445,104 @@ export function FarmerArea() {
     }
   };
 
+  const saveFarmImage = async (image: FarmerFarmImageRecord) => {
+    setImageSaveState((current) => ({ ...current, [image.id]: true }));
+    setProfileError(null);
+    setProfileMessage(null);
+
+    try {
+      await updateFarmImageDescription(image.id, image.caption);
+      await updateFarmImageOrder(image.id, image.sort_order);
+      await refreshFarmViews();
+      setProfileMessage("Bild gespeichert.");
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.warn("Bild konnte nicht gespeichert werden", error);
+      }
+
+      setProfileError(friendlyErrorMessage(error));
+    } finally {
+      setImageSaveState((current) => ({ ...current, [image.id]: false }));
+    }
+  };
+
+  const uploadFarmImageForFarm = async (farmId: string) => {
+    const draft = newImageForms[farmId] ?? emptyImageUploadDraft();
+
+    if (!draft.file) {
+      setProfileError("Bitte wähle zuerst eine JPEG-, PNG- oder WebP-Datei aus.");
+      return;
+    }
+
+    setImageSaveState((current) => ({ ...current, [`upload-${farmId}`]: true }));
+    setProfileError(null);
+    setProfileMessage(null);
+
+    try {
+      await uploadFarmImage(farmId, draft.file, {
+        caption: draft.caption.trim() || null,
+      });
+
+      await refreshFarmViews();
+      setNewImageForms((current) => ({ ...current, [farmId]: emptyImageUploadDraft() }));
+      setProfileMessage("Bild hochgeladen.");
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.warn("Bild konnte nicht hochgeladen werden", error);
+      }
+
+      setProfileError(friendlyErrorMessage(error));
+    } finally {
+      setImageSaveState((current) => ({ ...current, [`upload-${farmId}`]: false }));
+    }
+  };
+
+  const promoteFarmImage = async (imageId: string) => {
+    setImageSaveState((current) => ({ ...current, [`primary-${imageId}`]: true }));
+    setProfileError(null);
+    setProfileMessage(null);
+
+    try {
+      await setFarmImageAsPrimary(imageId);
+      await refreshFarmViews();
+      setProfileMessage("Hauptbild aktualisiert.");
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.warn("Hauptbild konnte nicht gesetzt werden", error);
+      }
+
+      setProfileError(friendlyErrorMessage(error));
+    } finally {
+      setImageSaveState((current) => ({ ...current, [`primary-${imageId}`]: false }));
+    }
+  };
+
+  const removeFarmImage = async (farmName: string, image: FarmerFarmImageRecord) => {
+    const label = image.caption?.trim() || image.storage_path.split("/").pop() || "Bild";
+
+    if (!window.confirm(`Bild "${label}" von ${farmName} wirklich löschen?`)) {
+      return;
+    }
+
+    setImageSaveState((current) => ({ ...current, [`delete-${image.id}`]: true }));
+    setProfileError(null);
+    setProfileMessage(null);
+
+    try {
+      await deleteFarmImage(image.id);
+      await refreshFarmViews();
+      setProfileMessage("Bild gelöscht.");
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.warn("Bild konnte nicht gelöscht werden", error);
+      }
+
+      setProfileError(friendlyErrorMessage(error));
+    } finally {
+      setImageSaveState((current) => ({ ...current, [`delete-${image.id}`]: false }));
+    }
+  };
+
   const renderRequests = () => (
     <section className="profile-block">
       <div className="section-heading compact-heading">
@@ -1790,6 +1937,11 @@ export function FarmerArea() {
 
           const products = dashboard.productsByFarmId[farm.id] ?? [];
           const openingHours = dashboard.openingHoursByFarmId[farm.id] ?? [];
+          const farmImages = dashboard.imagesByFarmId[farm.id] ?? [];
+          const primaryImage = farmImages.find((image) => image.is_primary) ?? farmImages[0] ?? null;
+          const previewImages = primaryImage
+            ? farmImages.filter((image) => image.id !== primaryImage.id)
+            : farmImages;
 
           return (
             <section className="profile-block dashboard-card" key={farm.id}>
@@ -2400,6 +2552,169 @@ export function FarmerArea() {
                   </button>
                 </div>
               </div>
+
+              <div className="subsection">
+                <div className="section-heading compact-heading">
+                  <div>
+                    <span className="eyebrow">Bilder</span>
+                    <h4>{farmImages.length} von 10 Bildern</h4>
+                  </div>
+                </div>
+
+                <div className="farm-image-hero">
+                  {primaryImage ? (
+                    <img src={primaryImage.publicUrl} alt={primaryImage.caption?.trim() || farm.name} />
+                  ) : (
+                    <div className="empty-state farm-image-placeholder">Noch kein Hofbild vorhanden.</div>
+                  )}
+
+                  {primaryImage && (
+                    <div className="farm-image-hero-meta">
+                      <span className="badge open">Hauptbild</span>
+                      <strong>{primaryImage.caption?.trim() || "Keine Beschreibung"}</strong>
+                      <p>{farm.name}</p>
+                    </div>
+                  )}
+                </div>
+
+                {previewImages.length > 0 && (
+                  <div className="farm-image-grid">
+                    {previewImages.map((image) => (
+                      <article className="farm-image-card" key={image.id}>
+                        <img src={image.publicUrl} alt={image.caption?.trim() || farm.name} />
+                        <div className="farm-image-card-body">
+                          <div className="farm-image-card-header">
+                            <span className={image.is_primary ? "badge open" : "badge delivery"}>
+                              {image.is_primary ? "Hauptbild" : "Bild"}
+                            </span>
+                            <strong>{image.caption?.trim() || "Keine Beschreibung"}</strong>
+                          </div>
+
+                          <div className="auth-grid">
+                            <label className="field field-wide">
+                              <span>Bildbeschreibung</span>
+                              <textarea
+                                rows={3}
+                                value={image.caption ?? ""}
+                                onChange={(event) =>
+                                  setDashboard((current) =>
+                                    updateFarmImageDraft(current, image.id, { caption: event.target.value }),
+                                  )
+                                }
+                              />
+                            </label>
+
+                            <label className="field">
+                              <span>Reihenfolge</span>
+                              <input
+                                type="number"
+                                value={image.sort_order}
+                                onChange={(event) =>
+                                  setDashboard((current) =>
+                                    updateFarmImageDraft(current, image.id, {
+                                      sort_order: Number(event.target.value),
+                                    }),
+                                  )
+                                }
+                              />
+                            </label>
+                          </div>
+
+                          <div className="action-row">
+                            <button
+                              className="secondary-button"
+                              onClick={() => saveFarmImage(image)}
+                              disabled={imageSaveState[image.id]}
+                            >
+                              {imageSaveState[image.id] ? "Bitte warten…" : "Speichern"}
+                            </button>
+                            {!image.is_primary && (
+                              <button
+                                className="secondary-button"
+                                onClick={() => promoteFarmImage(image.id)}
+                                disabled={imageSaveState[`primary-${image.id}`]}
+                              >
+                                {imageSaveState[`primary-${image.id}`] ? "Bitte warten…" : "Als Hauptbild verwenden"}
+                              </button>
+                            )}
+                            <button
+                              className="text-button"
+                              onClick={() => removeFarmImage(farm.name, image)}
+                              disabled={imageSaveState[`delete-${image.id}`]}
+                            >
+                              {imageSaveState[`delete-${image.id}`] ? "Bitte warten…" : "Löschen"}
+                            </button>
+                          </div>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                )}
+
+                <div className="subsection form-card">
+                  <h4>Bild hochladen</h4>
+
+                  <div className="auth-grid">
+                    <label className="field field-wide">
+                      <span>Bilddatei</span>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        onChange={(event) =>
+                          setNewImageForms((current) => ({
+                            ...current,
+                            [farm.id]: {
+                              ...(current[farm.id] ?? emptyImageUploadDraft()),
+                              file: event.target.files?.[0] ?? null,
+                            },
+                          }))
+                        }
+                      />
+                    </label>
+
+                    <label className="field field-wide">
+                      <span>Bildbeschreibung</span>
+                      <textarea
+                        rows={3}
+                        value={newImageForms[farm.id]?.caption ?? ""}
+                        onChange={(event) =>
+                          setNewImageForms((current) => ({
+                            ...current,
+                            [farm.id]: {
+                              ...(current[farm.id] ?? emptyImageUploadDraft()),
+                              caption: event.target.value,
+                            },
+                          }))
+                        }
+                        placeholder="Optionaler Alt-Text oder Beschreibung"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="action-row">
+                    <button
+                      className="secondary-button"
+                      onClick={() => uploadFarmImageForFarm(farm.id)}
+                      disabled={imageSaveState[`upload-${farm.id}`] || farmImages.length >= 10}
+                    >
+                      {imageSaveState[`upload-${farm.id}`] ? "Bitte warten…" : "Bild hochladen"}
+                    </button>
+                    <button
+                      className="text-button"
+                      onClick={() =>
+                        setNewImageForms((current) => ({
+                          ...current,
+                          [farm.id]: emptyImageUploadDraft(),
+                        }))
+                      }
+                    >
+                      Eingabe zurücksetzen
+                    </button>
+                  </div>
+
+                  {farmImages.length >= 10 && <p className="location-note">Maximal 10 Bilder pro Hof sind möglich.</p>}
+                </div>
+              </div>
             </section>
           );
         })}
@@ -2731,8 +3046,8 @@ export function FarmerArea() {
           <section className="profile-block">
             <div className="section-heading compact-heading">
               <div>
-                <span className="eyebrow">NahVersorgt</span>
-                <h3>Mein Bereich</h3>
+                <span className="eyebrow">Hofverwaltung</span>
+                <h3>Deine Hofdaten</h3>
               </div>
 
               <span className={`badge request-status ${profile?.role ?? "farmer_pending"}`}>
@@ -2782,7 +3097,7 @@ export function FarmerArea() {
                   role="tab"
                   aria-selected={adminViewTab === "admin"}
                 >
-                  Adminbereich
+                  Prüfungen
                 </button>
                 <button
                   className={adminViewTab === "farms" ? "chip active" : "chip"}
@@ -2790,7 +3105,7 @@ export function FarmerArea() {
                   role="tab"
                   aria-selected={adminViewTab === "farms"}
                 >
-                  Meine Höfe
+                  Höfe
                 </button>
               </div>
             </section>
