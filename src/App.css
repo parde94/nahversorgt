@@ -769,6 +769,21 @@ h1 {
   font-weight: 700;
 }
 
+.route-inline-warning {
+  margin: 8px 0 0;
+  color: #8b5a2b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.route-inline-action {
+  margin-top: 10px;
+}
+
+.route-sort-row {
+  margin-bottom: 8px;
+}
+
 .popup-button {
   margin-top: 8px;
 }

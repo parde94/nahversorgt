@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import { MapContainer, Marker, Polyline, Popup, TileLayer, useMap } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
@@ -17,6 +17,8 @@ import {
   getDistanceToRouteKm,
   getRouteBetweenPoints,
   getRoutingConfiguration,
+  getRoutingTableConfiguration,
+  getViaFarmDurationsByFarmId,
   type RoutePoint,
 } from "./services/routingService";
 import "leaflet/dist/leaflet.css";
@@ -89,7 +91,12 @@ type RouteField = "start" | "target";
 
 type RouteFarmResult = Farm & {
   distanceToRouteKm: number;
+  detourDurationSeconds: number | null;
+  detourDurationMinutes: number | null;
+  detourStatus: "idle" | "loading" | "success" | "unavailable";
 };
+
+type RouteSortMode = "distance" | "detour";
 
 type SavedRouteSearch = {
   corridorKm: number;
@@ -715,6 +722,41 @@ const fallbackFarms = mapFarmSourceEntriesToFarms(fallbackFarmEntries);
 
 const ROUTE_SEARCH_STORAGE_KEY = "nahversorgt-route-search-v1";
 const ROUTE_CORRIDOR_OPTIONS_KM = [5, 10, 15, 20, 30, 40, 50] as const;
+const ROUTE_DETOUR_BATCH_SIZE = 40;
+const ROUTE_DETOUR_CACHE_STORAGE_KEY = "nahversorgt-route-detour-cache-v1";
+const ROUTE_DETOUR_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+type DetourCacheEntry = {
+  detourDurationSeconds: number;
+  updatedAt: number;
+};
+
+const roundCoordinateForCache = (value: number) => Number(value.toFixed(5));
+
+const toRoutePointCacheToken = (point: RoutePoint) =>
+  `${roundCoordinateForCache(point.longitude)},${roundCoordinateForCache(point.latitude)}`;
+
+const buildDetourCacheKey = ({
+  start,
+  end,
+  farmId,
+  farmPoint,
+  routingProfile,
+}: {
+  start: RoutePoint;
+  end: RoutePoint;
+  farmId: string;
+  farmPoint: RoutePoint;
+  routingProfile: string;
+}) =>
+  [
+    "detour",
+    routingProfile,
+    toRoutePointCacheToken(start),
+    toRoutePointCacheToken(end),
+    farmId,
+    toRoutePointCacheToken(farmPoint),
+  ].join("|");
 
 const FarmImage = ({
   src,
@@ -765,16 +807,34 @@ function App() {
     useState<RouteField | null>(null);
   const [routeCorridorKm, setRouteCorridorKm] = useState<number>(10);
   const [routeOpeningFilter, setRouteOpeningFilter] = useState<RouteOpeningFilter>("all");
+  const [routeSortMode, setRouteSortMode] = useState<RouteSortMode>("distance");
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeError, setRouteError] = useState<string | null>(null);
   const [routeMessage, setRouteMessage] = useState<string | null>(null);
+  const [routeDetourError, setRouteDetourError] = useState<string | null>(null);
+  const [routeDetourLoading, setRouteDetourLoading] = useState(false);
+  const [routeDetourNextIndex, setRouteDetourNextIndex] = useState(0);
   const [routeCoordinates, setRouteCoordinates] = useState<RoutePoint[]>([]);
   const [routeDistanceKm, setRouteDistanceKm] = useState<number | null>(null);
   const [routeDurationMin, setRouteDurationMin] = useState<number | null>(null);
+  const [routeBaseDurationSeconds, setRouteBaseDurationSeconds] = useState<number | null>(null);
+  const [routeBaseStart, setRouteBaseStart] = useState<RoutePoint | null>(null);
+  const [routeBaseTarget, setRouteBaseTarget] = useState<RoutePoint | null>(null);
   const [routeFarms, setRouteFarms] = useState<RouteFarmResult[]>([]);
   const [routeIgnoredFarmCount, setRouteIgnoredFarmCount] = useState(0);
   const [routeSearchInitialized, setRouteSearchInitialized] = useState(false);
   const [routeSearchPerformed, setRouteSearchPerformed] = useState(false);
+
+  const detourCalculationAbortRef = useRef<AbortController | null>(null);
+  const detourCalculationSessionRef = useRef(0);
+  const detourCacheRef = useRef<Map<string, DetourCacheEntry>>(new Map());
+  const detourCacheLoadedRef = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      detourCalculationAbortRef.current?.abort();
+    };
+  }, []);
 
   useEffect(() => {
     let isCancelled = false;
@@ -1040,7 +1100,24 @@ function App() {
       return farm.selfService || /selbstbedienung/i.test(farm.openingHoursText ?? "");
     });
 
-    return openingFiltered.sort((a, b) => {
+    return [...openingFiltered].sort((a, b) => {
+      if (routeSortMode === "detour") {
+        const aHasDetour = a.detourStatus === "success" && a.detourDurationSeconds !== null;
+        const bHasDetour = b.detourStatus === "success" && b.detourDurationSeconds !== null;
+
+        if (aHasDetour && bHasDetour) {
+          return (a.detourDurationSeconds ?? Number.POSITIVE_INFINITY) - (b.detourDurationSeconds ?? Number.POSITIVE_INFINITY);
+        }
+
+        if (aHasDetour && !bHasDetour) {
+          return -1;
+        }
+
+        if (!aHasDetour && bHasDetour) {
+          return 1;
+        }
+      }
+
       if (a.openingState === "open" && b.openingState !== "open") {
         return -1;
       }
@@ -1051,11 +1128,22 @@ function App() {
 
       return a.distanceToRouteKm - b.distanceToRouteKm;
     });
-  }, [routeFarms, routeOpeningFilter, selectedCategories]);
+  }, [routeFarms, routeOpeningFilter, routeSortMode, selectedCategories]);
+
+  const routeDetourOrderedFarmIds = useMemo(
+    () =>
+      [...routeFarms]
+        .sort((a, b) => a.distanceToRouteKm - b.distanceToRouteKm)
+        .map((farm) => farm.id),
+    [routeFarms],
+  );
+
+  const routeDetourRemainingCount = Math.max(0, routeDetourOrderedFarmIds.length - routeDetourNextIndex);
 
   const mapCenter = userLocation ?? SOUTH_TYROL_CENTER;
   const selectedFarm = displayedFarms.find((farm) => farm.id === selectedFarmId) ?? null;
   const routingConfiguration = getRoutingConfiguration();
+  const routingTableConfiguration = getRoutingTableConfiguration();
   const geocodingProviderConfiguration = getGeocodingProviderConfiguration();
 
   const refreshPublicFarms = async () => {
@@ -1087,6 +1175,376 @@ function App() {
     }
 
     console.warn(scope, error);
+  };
+
+  const ensureDetourCacheLoaded = () => {
+    if (detourCacheLoadedRef.current || typeof window === "undefined") {
+      return;
+    }
+
+    detourCacheLoadedRef.current = true;
+
+    try {
+      const raw = window.localStorage.getItem(ROUTE_DETOUR_CACHE_STORAGE_KEY);
+
+      if (!raw) {
+        return;
+      }
+
+      const parsed = JSON.parse(raw) as Record<string, DetourCacheEntry>;
+      const now = Date.now();
+
+      for (const [key, entry] of Object.entries(parsed)) {
+        if (
+          !entry ||
+          typeof entry !== "object" ||
+          typeof entry.detourDurationSeconds !== "number" ||
+          !Number.isFinite(entry.detourDurationSeconds) ||
+          typeof entry.updatedAt !== "number"
+        ) {
+          continue;
+        }
+
+        if (now - entry.updatedAt > ROUTE_DETOUR_CACHE_TTL_MS) {
+          continue;
+        }
+
+        detourCacheRef.current.set(key, entry);
+      }
+    } catch {
+      window.localStorage.removeItem(ROUTE_DETOUR_CACHE_STORAGE_KEY);
+    }
+  };
+
+  const persistDetourCache = () => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      const now = Date.now();
+      const entries = [...detourCacheRef.current.entries()].filter(
+        ([, entry]) => now - entry.updatedAt <= ROUTE_DETOUR_CACHE_TTL_MS,
+      );
+
+      window.localStorage.setItem(
+        ROUTE_DETOUR_CACHE_STORAGE_KEY,
+        JSON.stringify(Object.fromEntries(entries)),
+      );
+    } catch {
+      // Cache ist optional, daher Schreibfehler ignorieren.
+    }
+  };
+
+  const getCachedDetourSeconds = (cacheKey: string) => {
+    ensureDetourCacheLoaded();
+
+    const entry = detourCacheRef.current.get(cacheKey);
+
+    if (!entry) {
+      return null;
+    }
+
+    if (Date.now() - entry.updatedAt > ROUTE_DETOUR_CACHE_TTL_MS) {
+      detourCacheRef.current.delete(cacheKey);
+      return null;
+    }
+
+    return entry.detourDurationSeconds;
+  };
+
+  const setCachedDetourSeconds = (cacheKey: string, detourDurationSeconds: number) => {
+    detourCacheRef.current.set(cacheKey, {
+      detourDurationSeconds,
+      updatedAt: Date.now(),
+    });
+    persistDetourCache();
+  };
+
+  const formatRouteDetourLabel = (farm: RouteFarmResult) => {
+    if (farm.detourStatus === "loading") {
+      return "Umweg wird berechnet …";
+    }
+
+    if (farm.detourStatus === "idle") {
+      return "Umwegzeit noch nicht berechnet";
+    }
+
+    if (farm.detourStatus === "unavailable" || farm.detourDurationSeconds === null) {
+      return "Umwegzeit nicht verfügbar";
+    }
+
+    if (farm.detourDurationSeconds < 60) {
+      return "unter 1 Min. Umweg";
+    }
+
+    const roundedMinutes = Math.max(1, Math.round(farm.detourDurationSeconds / 60));
+
+    return `ca. ${roundedMinutes} Min. Umweg`;
+  };
+
+  const updateRouteFarmDetours = (
+    updates: Record<
+      string,
+      {
+        detourStatus: RouteFarmResult["detourStatus"];
+        detourDurationSeconds?: number | null;
+      }
+    >,
+  ) => {
+    setRouteFarms((current) =>
+      current.map((farm) => {
+        const next = updates[farm.id];
+
+        if (!next) {
+          return farm;
+        }
+
+        const nextDetourSeconds =
+          next.detourDurationSeconds === undefined
+            ? farm.detourDurationSeconds
+            : next.detourDurationSeconds;
+
+        return {
+          ...farm,
+          detourStatus: next.detourStatus,
+          detourDurationSeconds: nextDetourSeconds,
+          detourDurationMinutes:
+            typeof nextDetourSeconds === "number" ? nextDetourSeconds / 60 : null,
+        };
+      }),
+    );
+  };
+
+  const runDetourBatchCalculation = async ({
+    farmIds,
+    sessionId,
+    start,
+    target,
+    baseDurationSeconds,
+    advanceIndexOnSuccess,
+    farmsSnapshot,
+  }: {
+    farmIds: string[];
+    sessionId: number;
+    start: RoutePoint;
+    target: RoutePoint;
+    baseDurationSeconds: number;
+    advanceIndexOnSuccess: number;
+    farmsSnapshot?: RouteFarmResult[];
+  }) => {
+    if (farmIds.length === 0 || routeDetourLoading) {
+      return;
+    }
+
+    const profile = routingTableConfiguration.routingProfile ?? "driving";
+    const sourceFarms = farmsSnapshot ?? routeFarms;
+    const farmById = new Map(sourceFarms.map((farm) => [farm.id, farm]));
+    const farmsToRequest: Array<{ id: string; point: RoutePoint; cacheKey: string }> = [];
+    const updatesFromCache: Record<
+      string,
+      {
+        detourStatus: RouteFarmResult["detourStatus"];
+        detourDurationSeconds?: number | null;
+      }
+    > = {};
+
+    farmIds.forEach((farmId) => {
+      const farm = farmById.get(farmId);
+
+      if (!farm || !farm.coordinates) {
+        return;
+      }
+
+      const farmPoint = {
+        latitude: farm.coordinates.latitude,
+        longitude: farm.coordinates.longitude,
+      } satisfies RoutePoint;
+
+      const cacheKey = buildDetourCacheKey({
+        start,
+        end: target,
+        farmId: farm.id,
+        farmPoint,
+        routingProfile: profile,
+      });
+
+      const cachedDetourSeconds = getCachedDetourSeconds(cacheKey);
+
+      if (cachedDetourSeconds !== null) {
+        updatesFromCache[farm.id] = {
+          detourStatus: "success",
+          detourDurationSeconds: cachedDetourSeconds,
+        };
+        return;
+      }
+
+      farmsToRequest.push({
+        id: farm.id,
+        point: farmPoint,
+        cacheKey,
+      });
+    });
+
+    if (Object.keys(updatesFromCache).length > 0) {
+      updateRouteFarmDetours(updatesFromCache);
+    }
+
+    if (farmsToRequest.length === 0) {
+      setRouteDetourError(null);
+      setRouteDetourNextIndex(advanceIndexOnSuccess);
+      return;
+    }
+
+    const loadingUpdates = Object.fromEntries(
+      farmsToRequest.map((farm) => [
+        farm.id,
+        {
+          detourStatus: "loading",
+          detourDurationSeconds: null,
+        },
+      ]),
+    ) as Record<string, { detourStatus: RouteFarmResult["detourStatus"]; detourDurationSeconds: number | null }>;
+
+    updateRouteFarmDetours(loadingUpdates);
+    setRouteDetourLoading(true);
+    setRouteDetourError(null);
+
+    detourCalculationAbortRef.current?.abort();
+    const abortController = new AbortController();
+    detourCalculationAbortRef.current = abortController;
+
+    try {
+      const viaFarmDurations = await getViaFarmDurationsByFarmId({
+        start,
+        end: target,
+        farms: farmsToRequest.map((farm) => ({ id: farm.id, point: farm.point })),
+        signal: abortController.signal,
+      });
+
+      if (sessionId !== detourCalculationSessionRef.current) {
+        return;
+      }
+
+      const nextUpdates = Object.fromEntries(
+        farmsToRequest.map((farm) => {
+          const viaFarmDurationSeconds = viaFarmDurations[farm.id];
+
+          if (typeof viaFarmDurationSeconds !== "number" || !Number.isFinite(viaFarmDurationSeconds)) {
+            return [
+              farm.id,
+              {
+                detourStatus: "unavailable",
+                detourDurationSeconds: null,
+              },
+            ];
+          }
+
+          const detourDurationSeconds = Math.max(0, viaFarmDurationSeconds - baseDurationSeconds);
+
+          setCachedDetourSeconds(farm.cacheKey, detourDurationSeconds);
+
+          return [
+            farm.id,
+            {
+              detourStatus: "success",
+              detourDurationSeconds,
+            },
+          ];
+        }),
+      ) as Record<string, { detourStatus: RouteFarmResult["detourStatus"]; detourDurationSeconds: number | null }>;
+
+      updateRouteFarmDetours(nextUpdates);
+      setRouteDetourNextIndex(advanceIndexOnSuccess);
+      setRouteDetourError(null);
+    } catch (error) {
+      if (abortController.signal.aborted || sessionId !== detourCalculationSessionRef.current) {
+        return;
+      }
+
+      logServiceError("Umwegzeiten konnten nicht berechnet werden", error);
+
+      const message = error instanceof Error ? error.message : String(error);
+
+      const unavailableUpdates = Object.fromEntries(
+        farmsToRequest.map((farm) => [
+          farm.id,
+          {
+            detourStatus: "unavailable",
+            detourDurationSeconds: null,
+          },
+        ]),
+      ) as Record<string, { detourStatus: RouteFarmResult["detourStatus"]; detourDurationSeconds: number | null }>;
+
+      updateRouteFarmDetours(unavailableUpdates);
+
+      if (
+        message.includes("ROUTING_TABLE_URL_DERIVATION_FAILED") ||
+        message.includes("ROUTING_TABLE_URL_INVALID")
+      ) {
+        setRouteDetourError(
+          "Der Table-Endpunkt konnte nicht aus VITE_ROUTING_API_URL abgeleitet werden. Bitte VITE_ROUTING_TABLE_API_URL setzen.",
+        );
+      } else {
+        setRouteDetourError(
+          "Die Umwegzeiten konnten derzeit nicht berechnet werden. Die Höfe entlang der Route werden weiterhin angezeigt.",
+        );
+      }
+    } finally {
+      if (sessionId === detourCalculationSessionRef.current) {
+        setRouteDetourLoading(false);
+      }
+    }
+  };
+
+  const triggerNextDetourBatch = async () => {
+    if (
+      !routeBaseStart ||
+      !routeBaseTarget ||
+      !Number.isFinite(routeBaseDurationSeconds ?? NaN) ||
+      routeDetourLoading
+    ) {
+      return;
+    }
+
+    const batchFarmIds = routeDetourOrderedFarmIds.slice(
+      routeDetourNextIndex,
+      routeDetourNextIndex + ROUTE_DETOUR_BATCH_SIZE,
+    );
+
+    await runDetourBatchCalculation({
+      farmIds: batchFarmIds,
+      sessionId: detourCalculationSessionRef.current,
+      start: routeBaseStart,
+      target: routeBaseTarget,
+      baseDurationSeconds: routeBaseDurationSeconds as number,
+      advanceIndexOnSuccess: routeDetourNextIndex + batchFarmIds.length,
+    });
+  };
+
+  const retryDetourBatch = async () => {
+    if (
+      !routeBaseStart ||
+      !routeBaseTarget ||
+      !Number.isFinite(routeBaseDurationSeconds ?? NaN) ||
+      routeDetourLoading
+    ) {
+      return;
+    }
+
+    const retryFarmIds = routeDetourOrderedFarmIds.slice(
+      routeDetourNextIndex,
+      routeDetourNextIndex + ROUTE_DETOUR_BATCH_SIZE,
+    );
+
+    await runDetourBatchCalculation({
+      farmIds: retryFarmIds,
+      sessionId: detourCalculationSessionRef.current,
+      start: routeBaseStart,
+      target: routeBaseTarget,
+      baseDurationSeconds: routeBaseDurationSeconds as number,
+      advanceIndexOnSuccess: routeDetourNextIndex + retryFarmIds.length,
+    });
   };
 
   const routePolylinePositions = useMemo(
@@ -1352,9 +1810,17 @@ function App() {
     return `${distanceToRouteKm.toFixed(1).replace(".", ",")} km von der Route`;
   };
 
+  const formatRouteDistanceAndDetourLabel = (farm: RouteFarmResult) =>
+    `${formatRouteDistanceLabel(farm.distanceToRouteKm)} · ${formatRouteDetourLabel(farm)}`;
+
   const runRouteSearch = async () => {
     setRouteError(null);
     setRouteMessage(null);
+    setRouteDetourError(null);
+
+    detourCalculationAbortRef.current?.abort();
+    detourCalculationSessionRef.current += 1;
+    const activeDetourSession = detourCalculationSessionRef.current;
 
     if (!routingConfiguration.isConfigured) {
       setRouteError("Routing ist noch nicht konfiguriert. Bitte VITE_ROUTING_API_URL setzen.");
@@ -1385,9 +1851,18 @@ function App() {
       setRouteStartQuery(resolvedStart.label);
       setRouteTargetQuery(resolvedTarget.label);
 
+      const routeStartPoint = {
+        latitude: resolvedStart.latitude,
+        longitude: resolvedStart.longitude,
+      } satisfies RoutePoint;
+      const routeTargetPoint = {
+        latitude: resolvedTarget.latitude,
+        longitude: resolvedTarget.longitude,
+      } satisfies RoutePoint;
+
       const route = await getRouteBetweenPoints(
-        { latitude: resolvedStart.latitude, longitude: resolvedStart.longitude },
-        { latitude: resolvedTarget.latitude, longitude: resolvedTarget.longitude },
+        routeStartPoint,
+        routeTargetPoint,
       );
 
       const farmsWithCoordinates = farms.filter((farm) => Boolean(farm.coordinates));
@@ -1401,6 +1876,9 @@ function App() {
           return {
             ...farm,
             distanceToRouteKm,
+            detourDurationSeconds: null,
+            detourDurationMinutes: null,
+            detourStatus: "idle",
           } satisfies RouteFarmResult;
         })
         .filter((farm) => farm.distanceToRouteKm <= routeCorridorKm);
@@ -1408,11 +1886,31 @@ function App() {
       setRouteCoordinates(route.coordinates);
       setRouteDistanceKm(route.distanceKm);
       setRouteDurationMin(route.durationMin);
+      setRouteBaseDurationSeconds(route.durationSeconds);
+      setRouteBaseStart(routeStartPoint);
+      setRouteBaseTarget(routeTargetPoint);
       setRouteFarms(alongRoute);
       setRouteIgnoredFarmCount(missingCoordinatesCount);
+      setRouteDetourNextIndex(0);
+      setRouteDetourLoading(false);
 
       if (alongRoute.length === 0) {
         setRouteMessage("Keine Höfe entlang dieser Route gefunden.");
+      } else {
+        const firstBatchFarmIds = [...alongRoute]
+          .sort((first, second) => first.distanceToRouteKm - second.distanceToRouteKm)
+          .slice(0, ROUTE_DETOUR_BATCH_SIZE)
+          .map((farm) => farm.id);
+
+        void runDetourBatchCalculation({
+          farmIds: firstBatchFarmIds,
+          sessionId: activeDetourSession,
+          start: routeStartPoint,
+          target: routeTargetPoint,
+          baseDurationSeconds: route.durationSeconds,
+          advanceIndexOnSuccess: firstBatchFarmIds.length,
+          farmsSnapshot: alongRoute,
+        });
       }
     } catch (error) {
       logServiceError("Routing fehlgeschlagen", error);
@@ -1431,6 +1929,12 @@ function App() {
 
       setRouteCoordinates([]);
       setRouteFarms([]);
+      setRouteBaseDurationSeconds(null);
+      setRouteBaseStart(null);
+      setRouteBaseTarget(null);
+      setRouteDetourNextIndex(0);
+      setRouteDetourLoading(false);
+      setRouteDetourError(null);
     } finally {
       setRouteLoading(false);
     }
@@ -2019,6 +2523,21 @@ function App() {
                     </div>
                   </div>
 
+                  <div className="admin-filter-row route-sort-row">
+                    <button
+                      className={routeSortMode === "distance" ? "chip active" : "chip"}
+                      onClick={() => setRouteSortMode("distance")}
+                    >
+                      Nähe zur Route
+                    </button>
+                    <button
+                      className={routeSortMode === "detour" ? "chip active" : "chip"}
+                      onClick={() => setRouteSortMode("detour")}
+                    >
+                      Kürzester Umweg
+                    </button>
+                  </div>
+
                   <div className="admin-filter-row">
                     <button
                       className={routeOpeningFilter === "all" ? "chip active" : "chip"}
@@ -2110,7 +2629,7 @@ function App() {
                                 <strong>{farm.name}</strong>
                                 <p>{farm.location}</p>
                                 <p>{formatRouteOpenStatus(farm)}</p>
-                                <p>{formatRouteDistanceLabel(farm.distanceToRouteKm)}</p>
+                                <p>{formatRouteDistanceAndDetourLabel(farm)}</p>
                                 <button className="primary-button popup-button" onClick={() => showFarmDetail(farm.id)}>
                                   Hof ansehen
                                 </button>
@@ -2129,6 +2648,30 @@ function App() {
                       {routeFarmsFiltered.length} Höfe entlang deiner Route ·{" "}
                       {routeDistanceKm?.toFixed(1).replace(".", ",") ?? "0,0"} km · ca. {Math.round(routeDurationMin ?? 0)} Min. · Korridor {routeCorridorKm} km
                     </p>
+                    {routeDetourLoading && <p className="route-inline-status">Umwegzeiten werden berechnet …</p>}
+                    {routeDetourError && <p className="route-inline-warning">{routeDetourError}</p>}
+                    {routeDetourError && (
+                      <button
+                        className="secondary-button route-inline-action"
+                        onClick={() => {
+                          void retryDetourBatch();
+                        }}
+                        disabled={routeDetourLoading}
+                      >
+                        Umwegzeiten erneut berechnen
+                      </button>
+                    )}
+                    {!routeDetourError && routeDetourRemainingCount > 0 && (
+                      <button
+                        className="secondary-button route-inline-action"
+                        onClick={() => {
+                          void triggerNextDetourBatch();
+                        }}
+                        disabled={routeDetourLoading}
+                      >
+                        Weitere Umwegzeiten berechnen
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -2162,7 +2705,7 @@ function App() {
                               {formatRouteOpenStatus(farm)}
                             </span>
                             <span className="badge delivery">
-                              {formatRouteDistanceLabel(farm.distanceToRouteKm)}
+                              {formatRouteDistanceAndDetourLabel(farm)}
                             </span>
                           </div>
 
